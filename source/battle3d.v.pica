@@ -1,0 +1,40 @@
+; battle3d.v.pica
+; Shader minimal untuk arena + Death Slug: satu matrix MVP gabungan (dihitung di CPU per draw
+; call lewat Mtx_Multiply), UV diteruskan ke fragment. Tanpa lighting per-vertex: shading sudah
+; "dipanggang" ke tekstur difus, jadi shader unlit ini cukup dan jauh lebih murah untuk GPU 3DS.
+;
+; Atribut vertex: v0 = posisi (vec3, w dipaksa 1.0), v1 = UV (vec2).
+; Normal tidak diunggah ke GPU karena tidak dibaca shader ini.
+
+; Uniform: matrix Model-View-Projection 4x4, diisi lewat
+; C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_mvp, &mvp) di battle3d.cpp
+.fvec mvp[4]
+
+; Register konstanta: picasso tidak terima literal float langsung di
+; operand (mis. "mov r0.w, 1.0" itu invalid), jadi w=1 diambil dari sini.
+.constf const1(0.0, 1.0, 0.0, 0.0)
+.alias  one const1.yyyy
+
+.alias inpos v0
+.alias intex v1
+
+.out outpos position
+.out outtex texcoord0
+.out outtex1 texcoord1
+
+.entry main
+.proc main
+    ; w = 1.0: posisi diperlakukan sebagai titik, bukan arah
+    mov r0.xyz, inpos
+    mov r0.w,   one
+
+    dp4 outpos.x, mvp[0], r0
+    dp4 outpos.y, mvp[1], r0
+    dp4 outpos.z, mvp[2], r0
+    dp4 outpos.w, mvp[3], r0
+
+    mov outtex, intex
+    mov outtex1, intex
+
+    end
+.end

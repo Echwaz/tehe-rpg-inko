@@ -1,0 +1,25 @@
+BasicInfo:
+  Title                   : $(APP_TITLE)
+  ProductCode             : $(APP_PRODUCT_CODE)
+  Logo                    : Homebrew   # logo bebas-hak-cipta bawaan makerom (bukan logo Nintendo asli)
+
+RomFs:
+  RootPath                : romfs      # sama seperti build .3dsx: lagu (.ogg) ikut tertanam
+
+TitleInfo:
+  Category                : Application
+  UniqueId                : $(APP_UNIQUE_ID)
+
+Option:
+  UseOnSD                 : true    # true supaya CIA diinstall ke SD, bukan NAND
+  FreeProductCode         : true    # menghapus batasan ProductCode (produk non-official)
+  MediaFootPadding        : false   # padding CCI, tidak relevan untuk CIA
+  EnableCrypt             : false   # tanpa enkripsi, cukup untuk homebrew (test-key)
+  EnableCompress          : true    # kompres exefs:/.code bila memungkinkan
+
+# AccessControlInfo sengaja tidak diisi manual: makerom dipanggil dengan
+# "-desc app:7" (lihat target `cia` di Makefile), yaitu preset akses standar
+# yang tersedia di makerom v0.18.3 dan sudah mencakup gsp (grafis), hid (sentuh/tombol), dsp::DSP (audio NDSP),
+# dan akses kartu SD -- semua yang game ini pakai. Kalau nanti butuh izin
+# ekstra (mis. akses jaringan), baru AccessControlInfo perlu ditulis manual
+# dan preset "-desc" dilepas.
