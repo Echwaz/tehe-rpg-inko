@@ -13,7 +13,7 @@ A fan-made Heaven Burns Red demake for the Nintendo 3DS
 3. Done. If you're using the cia version, install it with FBI.
 4. Open Rosalina Menu (L + Dpad Down + Select), select Miscellaneous options, and select Dump DSP firmware
 
-You can play and install this do 3DS Emulator, but you need to dump dsp firmware from real 3DS and put to SDMC folder
+You can play and install this in 3DS Emulator, but you need to dump dsp firmware from real 3DS and put to SDMC folder
 
 You can add music for dialogue scene and battle (Phase 1 and Phase 2 have different music)
 
