@@ -3,6 +3,7 @@
 A fan-made Heaven Burns Red demake for the Nintendo 3DS
 
 > Non-commercial fan project. Not affiliated with Wright Flyer Studios, Key, Yostar, or Nintendo
+> AI disclosure: The code for this project was written with the help of AI tools (Claude by Anthropic). Game design, direction, testing, and asset selection were done by the author.
 
 ## Installation
 
