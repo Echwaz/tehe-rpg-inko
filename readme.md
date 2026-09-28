@@ -34,16 +34,23 @@ Touchscreen is working for any button
 **Dialogue Scene**
 
 A = Advance
+
 B = Hide text box
+
 X = Skip
+
 Y = Open Log
 
 **Battle Scene**
 
 A = Select
+
 B = Back
+
 X = Execute
+
 Y = Swap
+
 L/R = Switch front-row character
 
 Press and hold (button / touch) on skill to read the description.
