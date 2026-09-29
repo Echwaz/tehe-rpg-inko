@@ -1,2 +1,8 @@
-build.bat
-clean.bat
+*.bat
+*.3dsx
+*.elf
+*.smdh
+*.cia
+*.map
+
+build/
