@@ -21,7 +21,11 @@
 //  - Musuh yang break: stun 1 giliran (aturan di atas). DP musuh TIDAK pulih sendiri; pemulihan hanya lewat
 //    gimmick khusus (belum ada), yang bisa memakai recoverFromBreak().
 //  - Devastation rate musuh HANYA naik oleh hit yang mengenai musuh yang sudah break.
-//    Blaster menaikkannya 4x-5x lebih cepat. Rate kembali ke 100% hanya jika musuh pulih dari break.
+//    Skill dengan dev_mult > 1 (skill milik Blaster) menaikkannya 4x-5x lebih cepat. Rate kembali
+//    ke 100% hanya jika musuh pulih dari break.
+//  - Role/class (Attacker, Breaker, Blaster, dst) hanyalah label, tanpa bonus apa pun. Bonus
+//    dipasang per SKILL lewat SkillBonus (HP Eff, DP Eff, Devastation), jadi pemain menentukan
+//    sendiri skill mana yang dapat bonus. Serangan biasa (Attack) selalu netral.
 //  - Sekutu yang break tidak memulihkan DP kecuali di-heal skill.
 //  - HP satu sekutu 0 = game over.
 //  - Buff/debuff: AtkUp dan DevUp sekali pakai. Hanya SKILL serangan yang memakai dan
@@ -40,8 +44,11 @@ constexpr int kStartSP            = 10;   // TUNING: cukup untuk skill biasa di 
 constexpr int kSpRegenFront       = 2;    // TUNING
 constexpr int kSpRegenBack        = 4;    // TUNING
 constexpr int kDevastationPerHit  = 4;    // TUNING: devastation rate per hit (hanya saat musuh break), karakter biasa
-constexpr int kBlasterDevMult     = 4;    // Blaster: 4x lebih cepat (serangan biasa dan skill biasa)
-constexpr int kBlasterSignatureDevMult = 5;   // Blaster: 5x lebih cepat (skill andalan)
+constexpr int kBlasterDevMult     = 4;    // dev_mult skill biasa Blaster: 4x lebih cepat
+constexpr int kBlasterSignatureDevMult = 5;   // dev_mult skill andalan (EX) Blaster: 5x lebih cepat
+constexpr int kHpEffPct           = 130;  // bonus HP Eff: damage ke HP jadi 130% (semua skill)
+constexpr int kDpEffPct           = 130;  // bonus DP Eff: damage ke DP jadi 130%
+constexpr int kDpEffExPct         = 150;  // bonus DP Eff pada skill EX: 150%
 constexpr int kMaxDevastation     = 300;
 constexpr int kMaxEffectStacks    = 2;    // tumpukan maksimum per jenis efek
 constexpr int kMaxDefUpPct        = 70;   // batas pengurangan damage dari DefUp
@@ -87,6 +94,11 @@ struct StatusEffect {
     bool       fresh;         // baru dipasang di ronde ini: belum dihitung oleh tickEffects
 };
 
+// Bonus yang dipasang ke sebuah skill serangan (bukan ke class). Angkanya ditentukan konstanta di
+// atas; skill EX mendapat bonus DP Eff dan Devastation yang lebih besar.
+enum class SkillBonus { None, HpEff, DpEff, Devastation };
+constexpr int kSkillBonusCount = 4;
+
 struct Skill {
     const char* name   = "";
     SkillKind   kind   = SkillKind::Attack;
@@ -96,7 +108,8 @@ struct Skill {
     int dp_pct  = 100;    // pengali damage saat mengenai DP (Breaker tinggi)
     int hp_pct  = 100;    // pengali damage saat mengenai HP (Attacker tinggi)
     SkillEffect fx;       // buff/debuff tambahan (opsional untuk Attack, wajib untuk Support)
-    int dev_mult = 0;     // pengali devastation rate per hit; 0 = ikut pengali karakter
+    int dev_mult = 1;     // pengali devastation rate per hit (bonus Devastation > 1); 1 = normal
+    SkillBonus bonus = SkillBonus::None;   // sumber hp_pct/dp_pct/dev_mult di atas (lihat refreshBonus)
     bool is_basic = false;   // attack biasa: tidak memakai dan tidak menghabiskan ATK+/DEV+
     bool ex = false;      // EX Skill: mahal, tanpa batas pemakaian per battle
     int max_uses = 0;     // 0 = tanpa batas
@@ -115,7 +128,19 @@ struct Skill {
     }
     Skill& withDescription(const char* d) { description = d; return *this; }
     Skill& withDevMult(int m) { dev_mult = m; return *this; }
-    Skill& asEx() { ex = true; return *this; }
+    // Hitung ulang hp_pct/dp_pct/dev_mult dari 'bonus'. Hanya skill Attack yang dapat bonus.
+    void refreshBonus() {
+        hp_pct = 100; dp_pct = 100; dev_mult = 1;
+        if (kind != SkillKind::Attack) return;
+        switch (bonus) {
+        case SkillBonus::HpEff:       hp_pct = kHpEffPct; break;
+        case SkillBonus::DpEff:       dp_pct = ex ? kDpEffExPct : kDpEffPct; break;
+        case SkillBonus::Devastation: dev_mult = ex ? kBlasterSignatureDevMult : kBlasterDevMult; break;
+        case SkillBonus::None:        break;
+        }
+    }
+    Skill& withBonus(SkillBonus b) { bonus = b; refreshBonus(); return *this; }
+    Skill& asEx() { ex = true; if (bonus != SkillBonus::None) refreshBonus(); return *this; }
     Skill& withUses(int uses) { max_uses = uses; return *this; }
     Skill& withStun(int chance) { stun_chance = chance; return *this; }
     Skill& withSpGain(int amount, int chance) { sp_gain = amount; sp_gain_chance = chance; return *this; }
@@ -138,7 +163,6 @@ struct Combatant {
     int  atk = 0;
     int  sp  = 0;
     std::array<Skill, 2> skills;
-    int  dev_mult = 1;           // pengali kenaikan devastation rate musuh per hit (Blaster > 1)
     std::array<int, 2> uses_left = {{ -1, -1 }};   // sisa pemakaian tiap skill; -1 = tanpa batas
 
     bool is_enemy     = false;
@@ -159,7 +183,6 @@ struct Combatant {
             uses_left[i] = skills[i].max_uses > 0 ? skills[i].max_uses : -1;
     }
 
-    Combatant& withDevMult(int m) { dev_mult = m; return *this; }
     bool alive() const { return hp > 0; }
 };
 
@@ -167,6 +190,17 @@ struct Party {
     std::array<Combatant, 3> front;
     std::array<Combatant, 3> back;
 };
+
+// ---- Class (role) ----
+// Hanya label untuk tampilan (tag di HUD dan layar Customize). Tidak memengaruhi damage, SP,
+// atau apa pun di battle; bonus ada di Skill::bonus.
+constexpr int kRoleCount = 6;
+const char* roleName(int idx);            // nama baku (string statis, aman disimpan di Combatant::role)
+int         roleIndex(const char* name);  // tidak peka huruf besar-kecil; -1 kalau tidak dikenal
+bool        setRole(Combatant& c, const char* role);   // false (tanpa perubahan) kalau tidak dikenal
+
+// Label bawaan HBR untuk tampilan: "[HP Eff]", "[DP Eff]", "[High Devastation]", atau "".
+const char* skillTag(const Skill& s);
 
 // Roster bawaan game (Ruka, Yuki, Tama di depan; Karen, Megumi, Tsukasa di belakang).
 Party makeDefaultParty();

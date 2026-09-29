@@ -86,6 +86,13 @@ const FxName kFxNames[] = {
     { "def_down", EffectType::DefDown, "DEF-" },
     { "atk_down", EffectType::AtkDown, "ATK-" },
 };
+struct BonusName { const char* key; SkillBonus bonus; };
+const BonusName kBonusNames[] = {
+    { "none", SkillBonus::None },   { "hp", SkillBonus::HpEff },
+    { "dp", SkillBonus::DpEff },    { "dev", SkillBonus::Devastation },
+};
+const char* bonusKey(SkillBonus b) { for (const auto& n : kBonusNames) if (n.bonus == b) return n.key; return "none"; }
+
 struct ScopeName { const char* key; EffectScope scope; const char* label; };
 const ScopeName kScopeNames[] = {
     { "self",  EffectScope::Self,     "Self" },
@@ -104,10 +111,12 @@ const char* scopeLabel(EffectScope s){ for (const auto& n : kScopeNames) if (n.s
 SkillCfg fromSkill(const Skill& s) {
     SkillCfg k;
     k.kind     = s.kind;
+    k.ex       = s.ex;
     k.name     = s.name ? s.name : "";
     k.sp_cost  = s.sp_cost;
     k.hits     = s.hits;
     k.power    = s.power;
+    k.bonus    = s.bonus;
     k.fx_type  = s.fx.type;
     k.fx_value = s.fx.value;
     k.fx_turns = s.fx.turns;
@@ -132,6 +141,7 @@ const PartyConfig& defaultsRef() {
 
 void sanitizeSkill(SkillCfg& s, const SkillCfg& d) {
     s.kind    = d.kind;
+    s.ex      = d.ex;
     s.name    = sanitizeText(s.name, kSkillNameMaxChars, d.name);
     s.sp_cost = clampv(s.sp_cost, 0, kSpCostMax);
 
@@ -139,10 +149,12 @@ void sanitizeSkill(SkillCfg& s, const SkillCfg& d) {
     case SkillKind::Attack:
         s.hits  = clampv(s.hits, kHitsMin, kHitsMax);
         s.power = clampv(s.power, 1, kAttackPowerMax);
+        s.bonus = static_cast<SkillBonus>(clampv(static_cast<int>(s.bonus), 0, kSkillBonusCount - 1));
         normalizeFx(s);
         break;
     case SkillKind::HealDP:
         s.hits  = d.hits;
+        s.bonus = SkillBonus::None;         // bonus hanya untuk skill serangan
         s.power = clampv(s.power, 1, kHealPowerMax);
         s.fx_type = EffectType::None;       // heal tidak memasang efek
         normalizeFx(s);
@@ -150,6 +162,7 @@ void sanitizeSkill(SkillCfg& s, const SkillCfg& d) {
     case SkillKind::Support:
         s.hits  = d.hits;
         s.power = d.power;
+        s.bonus = SkillBonus::None;
         if (s.fx_type == EffectType::None) {        // skill dukungan tanpa efek = tidak berguna
             s.fx_type = d.fx_type; s.fx_value = d.fx_value;
             s.fx_turns = d.fx_turns; s.fx_scope = d.fx_scope;
@@ -184,6 +197,7 @@ bool parseInt(const std::string& v, int& out) {
 
 void applyKey(CharCfg& c, const std::string& key, const std::string& val) {
     if (key == "name") { c.name = val; return; }
+    if (key == "role" || key == "class") { c.role = val; return; }
     if (key.size() < 8 || key.compare(0, 5, "skill") != 0 || key[6] != '.') return;   // "skillN.xxx"
     const int idx = key[5] - '1';
     if (idx < 0 || idx > 1) return;
@@ -196,6 +210,9 @@ void applyKey(CharCfg& c, const std::string& key, const std::string& val) {
     else if (f == "power")    { if (parseInt(val, n)) s.power    = n; }
     else if (f == "fx_value") { if (parseInt(val, n)) s.fx_value = n; }
     else if (f == "fx_turns") { if (parseInt(val, n)) s.fx_turns = n; }
+    else if (f == "bonus") {
+        for (const auto& e : kBonusNames) if (lower(val) == e.key) s.bonus = e.bonus;
+    }
     else if (f == "fx") {
         for (const auto& e : kFxNames) if (lower(val) == e.key) s.fx_type = e.type;
     } else if (f == "fx_scope") {
@@ -256,7 +273,8 @@ void sanitize(PartyConfig& cfg) {
     for (int i = 0; i < kRosterSize; ++i) {
         CharCfg& c = cfg.chars[i];
         c.key  = d.chars[i].key;
-        c.role = d.chars[i].role;
+        const int ri = roleIndex(c.role.c_str());
+        c.role = ri >= 0 ? std::string(roleName(ri)) : d.chars[i].role;   // class tak dikenal = bawaan
         c.name = sanitizeText(c.name, kNameMaxChars, d.chars[i].name);
         for (int j = 0; j < 2; ++j) sanitizeSkill(c.skills[j], d.chars[i].skills[j]);
     }
@@ -279,6 +297,8 @@ Party buildParty(const PartyConfig& in) {
 
             s.name    = intern(k.name);
             s.sp_cost = k.sp_cost;
+            s.bonus   = k.bonus;
+            s.refreshBonus();                  // hp_pct/dp_pct/dev_mult dari bonus skill ini
             if (k.kind == SkillKind::Attack) { s.hits = k.hits; s.power = k.power; }
             if (k.kind == SkillKind::HealDP) { s.power = k.power; }
             if (k.kind == SkillKind::Attack || k.kind == SkillKind::Support) {
@@ -293,6 +313,7 @@ Party buildParty(const PartyConfig& in) {
                 s.description = intern("Custom effect.");
             m.uses_left[j] = s.max_uses > 0 ? s.max_uses : -1;
         }
+        setRole(m, c.role.c_str());            // hanya label; tidak memengaruhi skill
     }
     return p;
 }
@@ -341,17 +362,21 @@ bool save(const std::string& path, const PartyConfig& in) {
 
     std::fprintf(f, "# Tehe-RPG-inko: custom party\n");
     std::fprintf(f, "# Bisa diedit lewat layar Customize (tekan SELECT saat dialog) atau langsung di sini.\n");
+    std::fprintf(f, "# role: attacker breaker blaster healer buffer debuffer\n");
+    std::fprintf(f, "#   Hanya label, tanpa efek. Bonus diatur per skill lewat skillN.bonus.\n");
+    std::fprintf(f, "# bonus: none hp dp dev (hp = damage HP +30%%, dp = damage DP +30%% (EX +50%%), dev = devastation x4 (EX x5))\n");
     std::fprintf(f, "# fx: none atk_up def_up dev_up def_down atk_down\n");
     std::fprintf(f, "# fx_scope: self front party (buff) | enemy (debuff, otomatis)\n");
     std::fprintf(f, "# Nilai di luar batas dijepit otomatis saat game dimuat.\n\n");
     for (const CharCfg& c : cfg.chars) {
-        std::fprintf(f, "[%s]\n# role: %s\nname=%s\n", lower(c.key).c_str(), c.role.c_str(), c.name.c_str());
+        std::fprintf(f, "[%s]\nname=%s\nrole=%s\n", lower(c.key).c_str(), c.name.c_str(), c.role.c_str());
         for (int j = 0; j < 2; ++j) {
             const SkillCfg& s = c.skills[j];
             const int n = j + 1;
             std::fprintf(f, "skill%d.name=%s\nskill%d.sp=%d\n", n, s.name.c_str(), n, s.sp_cost);
             if (s.kind == SkillKind::Attack) std::fprintf(f, "skill%d.hits=%d\n", n, s.hits);
             if (s.kind != SkillKind::Support) std::fprintf(f, "skill%d.power=%d\n", n, s.power);
+            if (s.kind == SkillKind::Attack) std::fprintf(f, "skill%d.bonus=%s\n", n, bonusKey(s.bonus));
             if (s.kind != SkillKind::HealDP) {
                 std::fprintf(f, "skill%d.fx=%s\nskill%d.fx_value=%d\nskill%d.fx_turns=%d\nskill%d.fx_scope=%s\n",
                              n, fxKey(s.fx_type), n, s.fx_value, n, s.fx_turns, n, scopeKey(s.fx_scope));
@@ -385,6 +410,33 @@ bool isModified(const PartyConfig& cfg, int i, int j) {
 }
 
 
+// ================= class =================
+
+void stepRole(CharCfg& c, int dir) {
+    if (dir != 1 && dir != -1) return;
+    const int idx = std::max(0, roleIndex(c.role.c_str()));
+    c.role = roleName((idx + dir + kRoleCount) % kRoleCount);
+}
+
+std::string bonusText(const SkillCfg& s) {
+    if (s.kind != SkillKind::Attack) return "";
+    char buf[24];
+    switch (s.bonus) {
+    case SkillBonus::HpEff:
+        std::snprintf(buf, sizeof buf, "HP +%d%%", kHpEffPct - 100);
+        return buf;
+    case SkillBonus::DpEff:
+        std::snprintf(buf, sizeof buf, "DP +%d%%", (s.ex ? kDpEffExPct : kDpEffPct) - 100);
+        return buf;
+    case SkillBonus::Devastation:
+        std::snprintf(buf, sizeof buf, "DEV x%d", s.ex ? kBlasterSignatureDevMult : kBlasterDevMult);
+        return buf;
+    default:
+        return "";
+    }
+}
+
+
 // ================= bantu layar Customize =================
 
 bool fieldVisible(const SkillCfg& s, SkillField f) {
@@ -396,6 +448,7 @@ bool fieldVisible(const SkillCfg& s, SkillField f) {
     case SkillField::SpCost:  return true;
     case SkillField::Hits:    return atk;
     case SkillField::Power:   return atk || heal;
+    case SkillField::Bonus:   return atk;
     case SkillField::FxType:  return atk || sup;
     case SkillField::FxValue:
     case SkillField::FxTurns: return hasFx;
@@ -409,6 +462,7 @@ const char* fieldLabel(const SkillCfg& s, SkillField f) {
     case SkillField::SpCost:  return "SP Cost";
     case SkillField::Hits:    return "Hits";
     case SkillField::Power:   return s.kind == SkillKind::HealDP ? "DP Restored" : "Power";
+    case SkillField::Bonus:   return "Bonus";
     case SkillField::FxType:  return "Effect";
     case SkillField::FxValue: return "Amount";
     case SkillField::FxTurns: return "Duration";
@@ -423,6 +477,7 @@ std::string fieldText(const SkillCfg& s, SkillField f) {
     case SkillField::SpCost:  std::snprintf(buf, sizeof buf, "%d", s.sp_cost); return buf;
     case SkillField::Hits:    std::snprintf(buf, sizeof buf, "%d", s.hits);    return buf;
     case SkillField::Power:   std::snprintf(buf, sizeof buf, "%d", s.power);   return buf;
+    case SkillField::Bonus:   return s.bonus == SkillBonus::None ? std::string("None") : bonusText(s);
     case SkillField::FxType:  return fxLabel(s.fx_type);
     case SkillField::FxValue:
         std::snprintf(buf, sizeof buf, s.fx_type == EffectType::DevUp ? "%d" : "%d%%", s.fx_value);
@@ -445,6 +500,9 @@ void stepField(SkillCfg& s, SkillField f, int dir) {
     case SkillField::Hits:   s.hits    = clampv(s.hits + dir, kHitsMin, kHitsMax); break;
     case SkillField::Power:
         s.power = clampv(s.power + dir, 1, s.kind == SkillKind::HealDP ? kHealPowerMax : kAttackPowerMax);
+        break;
+    case SkillField::Bonus:
+        s.bonus = static_cast<SkillBonus>((static_cast<int>(s.bonus) + dir + kSkillBonusCount) % kSkillBonusCount);
         break;
     case SkillField::FxType: {
         int idx = 0;

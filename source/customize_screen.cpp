@@ -14,7 +14,8 @@ enum ButtonId {
     BtnDone = 10, BtnResetAll, BtnBack, BtnResetChar, BtnResetSkill, BtnRename,
     BtnSkill0 = 20,                  // 20, 21: dua skill di halaman Character
     BtnMinus0 = 30,                  // 30 + SkillField
-    BtnPlus0  = 40                   // 40 + SkillField
+    BtnPlus0  = 40,                  // 40 + SkillField
+    BtnClassMinus = 50, BtnClassPlus  // halaman Character: ganti class
 };
 
 // Halaman Roster: 3 kolom x 2 baris kotak karakter.
@@ -24,8 +25,10 @@ float tileY(int i) { return 34.f + (i / 3) * 88.f; }
 
 // Halaman Roster dan Character: tombol bawah.
 const float kFootY = 206.f, kFootH = 28.f;
+// Halaman Character: baris pemilih class (di bawah dua skill).
+const float kClassRowY = 160.f;
 // Halaman Skill: baris nilai dan tombol bawah.
-const float kRowY0 = 40.f, kRowStep = 24.f, kRowH = 22.f;
+const float kRowY0 = 40.f, kRowStep = 21.f, kRowH = 19.f;   // 8 baris nilai muat di atas tombol bawah
 const float kSkillFootY = 210.f, kSkillFootH = 26.f;
 const int   kToastFrames = 150;
 
@@ -134,6 +137,8 @@ void CustomizeScreen::buildButtons() {
         buttons_.add(BtnRename, 218, 14, 92, 30, "Rename", true, colors::cyan, 0.45f);
         buttons_.add(BtnSkill0, 10, 64, 300, 42, "", true, 0);
         buttons_.add(BtnSkill0 + 1, 10, 112, 300, 42, "", true, 0);
+        buttons_.add(BtnClassMinus, 160, kClassRowY, 32, kRowH, "-", true, colors::pink, 0.6f);
+        buttons_.add(BtnClassPlus,  268, kClassRowY, 32, kRowH, "+", true, colors::pink, 0.6f);
         buttons_.add(BtnResetChar, 10, kFootY, 96, kFootH, "Reset", true, colors::cyan, 0.45f);
         buttons_.add(BtnBack, 214, kFootY, 96, kFootH, "Back", true, colors::pink, 0.5f);
         break;
@@ -190,6 +195,10 @@ void CustomizeScreen::handle(int id) {
         sk_ = id - BtnSkill0;
         page_ = Page::Skill;
         buildButtons();
+        return;
+    }
+    if (id == BtnClassMinus || id == BtnClassPlus) {
+        stepRole(cfg_.chars[ch_], id == BtnClassPlus ? +1 : -1);   // hanya label, skill tidak berubah
         return;
     }
     if (id >= BtnMinus0 && id < BtnMinus0 + kSkillFieldCount) {
@@ -260,7 +269,9 @@ void CustomizeScreen::drawTop(TextRenderer& text) const {
             const SkillCfg& s = c.skills[j];
             const float sy = y + 38.f + j * 29.f;
             text.drawShadow(s.name.c_str(), x + 8, sy, fitScale(text, s.name, 0.36f, 112.f), colors::white);
-            const std::string line = skillLine(s);
+            std::string line = skillLine(s);
+            const std::string bonus = bonusText(s);
+            if (!bonus.empty()) line += "  " + bonus;
             text.drawShadow(line.c_str(), x + 8, sy + 13, fitScale(text, line, 0.28f, 112.f), colors::cyanLight);
         }
     }
@@ -269,8 +280,8 @@ void CustomizeScreen::drawTop(TextRenderer& text) const {
         text.drawCentered(toast_.c_str(), 200, 230, 0.36f, colors::pinkLight);
     } else {
         const char* hint = page_ == Page::Roster ? "Tap a character to edit. Done saves your party."
-                         : page_ == Page::Character ? "Tap a skill to edit it, or Rename the character."
-                                                    : "Use - and + to change values. B goes back.";
+                         : page_ == Page::Character ? "Tap a skill to edit it. Class is only a label."
+                                                    : "Use - and + to change values. Bonus picks HP, DP or DEV.";
         text.drawCentered(hint, 200, 230, 0.32f, colors::grey);
     }
 }
@@ -327,9 +338,17 @@ void CustomizeScreen::drawCharacter(TextRenderer& text) const {
         std::snprintf(buf, sizeof buf, "-%d SP", s.sp_cost);
         text.drawRight(buf, 296, y + 7 + off, 0.42f, colors::pinkLight);
         const std::string line = skillLine(s);
-        text.drawShadow(line.c_str(), 26, y + 24 + off, fitScale(text, line, 0.34f, 260.f), colors::cyanLight);
+        const std::string bonus = bonusText(s);
+        text.drawShadow(line.c_str(), 26, y + 24 + off, fitScale(text, line, 0.34f, bonus.empty() ? 260.f : 190.f),
+                        colors::cyanLight);
+        if (!bonus.empty()) text.drawRight(bonus.c_str(), 296, y + 24 + off, 0.34f, colors::yellow);
     }
-    text.drawCentered("Tap a skill to edit it", 160, 172, 0.34f, colors::grey);
+
+    drawPill(8, kClassRowY, 304, kRowH, mixColor(colors::bg, colors::cyan, 0.10f),
+             mixColor(colors::bg, colors::cyan, 0.35f), kZPanel - 0.02f);
+    text.drawShadow("Class", 18, kClassRowY + 3, 0.4f, colors::white);
+    text.drawCentered(c.role.c_str(), 230, kClassRowY + kRowH * 0.5f, 0.42f, colors::yellow);
+    text.drawCentered("Class is just a label. Bonuses are set per skill.", 160, 190, 0.32f, colors::grey);
 }
 
 void CustomizeScreen::drawSkill(TextRenderer& text) const {
@@ -348,7 +367,7 @@ void CustomizeScreen::drawSkill(TextRenderer& text) const {
         const float y = rowY(k++);
         drawPill(8, y, 304, kRowH, mixColor(colors::bg, colors::cyan, 0.10f),
                  mixColor(colors::bg, colors::cyan, 0.35f), kZPanel - 0.02f);
-        text.drawShadow(fieldLabel(s, field), 18, y + 4, 0.4f, colors::white);
+        text.drawShadow(fieldLabel(s, field), 18, y + 3, 0.4f, colors::white);
         text.drawCentered(fieldText(s, field).c_str(), 230, y + kRowH * 0.5f, 0.42f, colors::yellow);
     }
 }

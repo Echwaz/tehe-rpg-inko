@@ -360,50 +360,107 @@ static void testBlasterDevastation() {
         e.broken = true;
         return e;
     };
-    Combatant normal = dummy(0, 1);
-    Combatant blaster = dummy(0, 1);
-    blaster.dev_mult = kBlasterDevMult;
+    // Pengali devastation rate hanya datang dari skill, bukan dari karakter/role.
+    Combatant user = dummy(0, 1);
 
-    // Karakter biasa: +2 per hit. Blaster: x4. Skill andalan Blaster: x5.
+    // Skill biasa: +4 per hit. Skill Blaster: x4. Skill andalan Blaster: x5.
     Combatant e1 = brokenEnemy();
-    performAttack(hit(1, 1), normal, e1);
+    performAttack(hit(1, 1), user, e1);
     assert(e1.devastation == 100 + kDevastationPerHit);
     Combatant e2 = brokenEnemy();
-    performAttack(hit(1, 1), blaster, e2);
+    Skill blasterSkill = hit(1, 1);
+    blasterSkill.dev_mult = kBlasterDevMult;
+    performAttack(blasterSkill, user, e2);
     assert(e2.devastation == 100 + kDevastationPerHit * kBlasterDevMult);
     Combatant e3 = brokenEnemy();
     Skill sig = hit(3, 1);
     sig.dev_mult = kBlasterSignatureDevMult;
-    performAttack(sig, blaster, e3);
+    performAttack(sig, user, e3);
     assert(e3.devastation == 100 + 3 * kDevastationPerHit * kBlasterSignatureDevMult);
 
     // Musuh yang belum break: Blaster pun tidak menaikkan devastation rate.
     Combatant intact = dummy(1000, 1000);
     intact.is_enemy = true;
-    performAttack(sig, blaster, intact);
+    performAttack(sig, user, intact);
     assert(intact.devastation == 100);
 
-    // Roster nyata, musuh sedang break: Karen (Blaster) jauh lebih cepat dari Tama (Healer).
+    // Roster nyata, musuh sedang break: skill Karen (Blaster) jauh lebih cepat dari attack biasa.
     auto runRound = [](bool withKaren) {
         Battle b;
         b.start();
-        assert(b.party().back[0].name == "Karen" && b.party().back[0].dev_mult == kBlasterDevMult);
+        assert(b.party().back[0].name == "Karen");
         assert(b.party().back[0].skills[0].dev_mult == kBlasterSignatureDevMult);
+        assert(b.party().back[0].skills[1].dev_mult == kBlasterDevMult);
         b.enemy_.dp = 0;
         b.enemy_.broken = true;
-        if (withKaren) b.swapSlot(2, 0);            // Karen menggantikan Tama
+        if (withKaren) {
+            b.swapSlot(2, 0);                        // Karen menggantikan Tama
+            b.setCommand(2, CommandType::Skill, 1);  // Wild Fling: 3 hit, tiap hit x4
+        }
         b.execute();
         runUntil(b, BattlePhase::EnemyTurn);
         return b.enemy().devastation;
     };
     const int without = runRound(false);   // Ruka + Yuki + Tama, semua Attack biasa
-    const int with = runRound(true);       // Ruka + Yuki + Karen
+    const int with = runRound(true);       // Ruka + Yuki + Karen (Wild Fling)
     assert(without == 100 + 3 * kDevastationPerHit);
-    assert(with == 100 + 2 * kDevastationPerHit + kDevastationPerHit * kBlasterDevMult);
+    assert(with == 100 + 2 * kDevastationPerHit + 3 * kDevastationPerHit * kBlasterDevMult);
     assert(with > without);
+
+    // Attack biasa Karen TIDAK dapat bonus role: sama seperti karakter lain.
+    Battle b;
+    b.start();
+    b.enemy_.dp = 0;
+    b.enemy_.broken = true;
+    b.swapSlot(2, 0);                                // Karen di slot 2, command default = Attack
+    b.execute();
+    runUntil(b, BattlePhase::EnemyTurn);
+    assert(b.enemy().devastation == 100 + 3 * kDevastationPerHit);
 }
 
-// Aturan overflow: satu hit yang menghabiskan DP tidak melukai HP; hit berikutnya melukai HP.
+// Role hanya label. Bonus ada di Skill::bonus: cek nilai bawaan roster dan bahwa Attack biasa netral.
+static void testDefaultSkillBonuses() {
+    const Party p = makeDefaultParty();
+    const Combatant& ruka = p.front[0];
+    const Combatant& yuki = p.front[1];
+    const Combatant& karen = p.back[0];
+    for (int j = 0; j < 2; ++j) {
+        assert(ruka.skills[j].bonus == SkillBonus::HpEff && ruka.skills[j].hp_pct == kHpEffPct);
+        assert(ruka.skills[j].dp_pct == 100 && ruka.skills[j].dev_mult == 1);
+        assert(yuki.skills[j].bonus == SkillBonus::DpEff && yuki.skills[j].hp_pct == 100);
+    }
+    assert(yuki.skills[0].dp_pct == kDpEffExPct && yuki.skills[1].dp_pct == kDpEffPct);   // EX lebih besar
+    assert(karen.skills[0].dev_mult == kBlasterSignatureDevMult && karen.skills[1].dev_mult == kBlasterDevMult);
+    assert(karen.skills[0].hp_pct == 100 && karen.skills[0].dp_pct == 100);
+
+    // Karakter lain: tanpa bonus sama sekali.
+    for (const Combatant* c : { &p.front[2], &p.back[1], &p.back[2] })
+        for (const Skill& s : c->skills)
+            assert(s.bonus == SkillBonus::None && s.hp_pct == 100 && s.dp_pct == 100 && s.dev_mult == 1);
+
+    // Attack biasa selalu netral, siapa pun pemakainya.
+    for (const Combatant* c : { &ruka, &yuki, &karen }) {
+        const Skill basic = normalAttackOf(*c);
+        assert(basic.bonus == SkillBonus::None && basic.hp_pct == 100 && basic.dp_pct == 100 && basic.dev_mult == 1);
+    }
+
+    // Mengganti label role tidak mengubah apa pun pada skill.
+    Combatant k = karen;
+    assert(setRole(k, "healer") && std::string(k.role) == "Healer");
+    assert(k.skills[0].dev_mult == kBlasterSignatureDevMult && k.skills[1].dev_mult == kBlasterDevMult);
+    assert(!setRole(k, "Tank") && std::string(k.role) == "Healer");
+
+    // Bonus hanya berlaku untuk skill Attack; Heal/Support tetap netral walau diberi bonus.
+    Skill heal("H", SkillKind::HealDP, 1, 0, 5);
+    heal.withBonus(SkillBonus::HpEff);
+    assert(heal.hp_pct == 100);
+    Skill atk("A", SkillKind::Attack, 1, 1, 5);
+    atk.withBonus(SkillBonus::DpEff);
+    assert(atk.dp_pct == kDpEffPct);
+    atk.asEx();                                   // menjadi EX: bonus dihitung ulang
+    assert(atk.dp_pct == kDpEffExPct);
+}
+
 static void testOverflowRule() {
     // 50 damage dalam 1 hit ke DP 30: DP habis, 20 sisanya dibuang, HP utuh.
     Combatant a = dummy(30, 100);
@@ -953,7 +1010,7 @@ static void plan(Battle& b, Policy pol) {
                 sc = s.hits * s.power * (broken ? s.hp_pct : s.dp_pct) / 100;
                 // Saat musuh sedang break, kenaikan devastation rate ikut dihargai
                 // (sekitar 1 poin damage tim per 1% rate).
-                if (broken) sc += s.hits * (s.dev_mult > 0 ? s.dev_mult : n.dev_mult) * kDevastationPerHit;
+                if (broken) sc += s.hits * std::max(1, s.dev_mult) * kDevastationPerHit;
                 if (useFx) sc += fxScore(b, s.fx) / 2;
             }
             if (sc > score) { score = sc; pick = i; }
@@ -1157,6 +1214,7 @@ int main() {
     testSwapWithinRows();
     testBuffFlow();
     testBlasterDevastation();
+    testDefaultSkillBonuses();
     testOverflowRule();
     testNoAutoRecovery();
     testSkillList();

@@ -1305,10 +1305,13 @@ void BattleScreen::drawSkillDetail(TextRenderer& text) const {
         y += 20.f;
     };
 
-    for (const std::string& wrapped : wrapText(text, s.description, 0.4f, 276.f)) line(wrapped);
+    std::string desc = s.description;
+    const char* tag = skillTag(s);
+    if (tag[0]) { if (!desc.empty()) desc += ' '; desc += tag; }
+    for (const std::string& wrapped : wrapText(text, desc, 0.4f, 276.f)) line(wrapped);
 
     if (s.kind == SkillKind::Attack) {
-        const int mult = (s.dev_mult > 0) ? s.dev_mult : c.dev_mult;
+        const int mult = s.dev_mult;
         if (mult > 1) {
             std::snprintf(buf, sizeof buf, "Increases enemy devastation rate %dx faster", mult);
             line(buf);

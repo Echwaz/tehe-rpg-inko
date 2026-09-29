@@ -30,7 +30,7 @@ private:
     int           frame_        = 0;
 };
 
-// Layar Custom Party: ganti nama karakter serta nilai dan efek skill (lihat party_config.h).
+// Layar Custom Party: ganti nama dan class karakter serta nilai dan efek skill (lihat party_config.h).
 // Dibuka dari main.cpp lewat SELECT saat dialog. Tiga halaman: daftar karakter -> satu karakter
 // -> satu skill. Perubahan disimpan ke party.cfg oleh main.cpp saat layar ditutup.
 class CustomizeScreen {
