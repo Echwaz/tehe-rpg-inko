@@ -662,7 +662,7 @@ void BattleScreen::handle(int id) {
         battle_.execute();
         menu_ = Menu::Plan;
     } else if (id == BtnOverdrive) {
-        battle_.activateOverdrive();
+        if (battle_.activateOverdrive()) sfx::play(sfx::Id::Overdrive);
     } else if (id == BtnRestart) {
         restart_ = true;
     }

@@ -19,6 +19,7 @@ enum class Id {
     DefeatShatter,  // pecahan bos meledak
     DefeatRoots,    // pohon putih muncul
     DefeatSettle,   // debu dan ekor rendah
+    Overdrive,      // Overdrive diaktifkan
     Count
 };
 

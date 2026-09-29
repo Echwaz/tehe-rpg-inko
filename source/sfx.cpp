@@ -22,6 +22,7 @@ const char* const kPaths[] = {
     "romfs:/sfx/defeat_shatter.ogg",
     "romfs:/sfx/defeat_roots.ogg",
     "romfs:/sfx/defeat_settle.ogg",
+    "romfs:/sfx/overdrive.ogg",
 };
 constexpr int kCount = static_cast<int>(Id::Count);
 static_assert(sizeof(kPaths) / sizeof(kPaths[0]) == kCount, "kPaths harus sejajar dengan enum Id");
