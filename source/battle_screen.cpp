@@ -218,22 +218,30 @@ void drawBadgeAtkUp(float cx, float cy) {
                      ax, ay - 3.6f, colors::cyanLight, z);
 }
 
+inline float snapPx(float v) { return std::floor(v) + 0.5f; }
+
 // DEF-: perisai perak bergaris silang dan panah turun merah muda.
 void drawBadgeDefDown(float cx, float cy, float scale = 1.f) {
     badgeBase(cx, cy, colors::cyan, kBadgeDark, scale);
     const float z = kZBadge + 0.01f;
-    const float ox = cx - 1.8f * scale, oy = cy - 1.2f * scale;
-    const float ax0 = ox - 2.2f * scale, ax1 = ox + 2.2f * scale;
-    const float ay0 = oy - 2.7f * scale, ay1 = oy - 0.1f * scale, tipY = oy + 3.1f * scale;
+    const float kShield = 1.3f;
+    const float s = scale * kShield;
+    const float ox  = snapPx(cx - 2.2f * scale);          // sumbu tengah perisai
+    const float hw  = std::round(2.2f * s);               // setengah lebar, bilangan bulat
+    const float ax0 = ox - hw, ax1 = ox + hw;
+    const float ay0 = snapPx(cy - 1.0f * scale - 2.7f * s);
+    const float ay1 = ay0 + std::round(2.6f * s);
+    const float tipY = ay0 + 5.8f * s;
+
     drawLine(ax0, ay0, ax1, ay0, 1.f, colors::white, z);
     drawLine(ax1, ay0, ax1, ay1, 1.f, colors::white, z);
     drawLine(ax1, ay1, ox, tipY, 1.f, colors::white, z);
     drawLine(ox, tipY, ax0, ay1, 1.f, colors::white, z);
     drawLine(ax0, ay1, ax0, ay0, 1.f, colors::white, z);
-    // Garis silang vertikal disambung sampai dekat ujung bawah (tidak berhenti di tengah)
-    // supaya menyatu dengan runcingnya perisai, bukan menggantung sendiri.
-    drawLine(ox, ay0, ox, tipY - 0.5f * scale, 0.9f, colors::white, z);
-    drawLine(ax0, oy - 0.9f * scale, ax1, oy - 0.9f * scale, 0.9f, colors::white, z);
+
+    drawLine(ox, ay0, ox, tipY - 0.5f * s, 1.f, colors::white, z);
+    const float midY = snapPx(ay0 + 1.8f * s);
+    drawLine(ax0, midY, ax1, midY, 1.f, colors::white, z);
 
     const float bx = cx + 3.6f * scale, by = cy + 1.4f * scale;
     drawLine(bx, by - 3.2f * scale, bx, by + 0.6f * scale, 1.1f, colors::pinkLight, z);
