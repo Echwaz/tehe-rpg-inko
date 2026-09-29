@@ -130,7 +130,8 @@ inline Skill makeSupport(const char* name, int cost, EffectType t, int value, in
 }
 
 struct Combatant {
-    std::string name;
+    std::string name;            // nama tampilan (boleh diganti pemain lewat Custom Party)
+    std::string key;             // pengenal tetap (nama bawaan): untuk ikon dan gaya serangan, TIDAK ikut berubah
     const char* role = "";
     int  max_dp = 0, dp = 0;
     int  max_hp = 0, hp = 0;
@@ -151,7 +152,7 @@ struct Combatant {
     Combatant() = default;
     Combatant(const char* n, const char* r, int dp_, int hp_, int atk_,
               const Skill& s0, const Skill& s1)
-        : name(n), role(r), max_dp(dp_), dp(dp_), max_hp(hp_), hp(hp_), atk(atk_), sp(kStartSP) {
+        : name(n), key(n), role(r), max_dp(dp_), dp(dp_), max_hp(hp_), hp(hp_), atk(atk_), sp(kStartSP) {
         skills[0] = s0;
         skills[1] = s1;
         for (int i = 0; i < 2; ++i)
@@ -166,6 +167,9 @@ struct Party {
     std::array<Combatant, 3> front;
     std::array<Combatant, 3> back;
 };
+
+// Roster bawaan game (Ruka, Yuki, Tama di depan; Karen, Megumi, Tsukasa di belakang).
+Party makeDefaultParty();
 
 
 struct HitResult {
@@ -243,6 +247,11 @@ struct Command {
 
 class Battle {
 public:
+    // Party kustom (lihat party_config.h). Dipakai oleh start() berikutnya sebagai ganti roster
+    // bawaan. Yang disimpan adalah salinan, jadi tiap battle selalu mulai dari kondisi awal.
+    void setPartyOverride(const Party& p) { partyOverride_ = p; hasPartyOverride_ = true; }
+    void clearPartyOverride() { hasPartyOverride_ = false; }
+
     void start();
     void update();                       // panggil tiap frame
 
@@ -313,6 +322,9 @@ private:
                 const AttackSummary& a);
     void recordHits(const AttackSummary& a, bool onEnemy, int slot, int baseDelay,
                      int attackerSlot = -1);
+
+    Party       partyOverride_;
+    bool        hasPartyOverride_ = false;
 
     Party       party_;
     Combatant   enemy_;

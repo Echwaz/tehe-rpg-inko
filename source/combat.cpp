@@ -207,10 +207,10 @@ void healPartyDP(Party& p, int amount) {
 }
 
 
-void Battle::start() {
-    party_ = Party();
+Party makeDefaultParty() {
+    Party p;
     // Angka damage/SP adalah rancangan sendiri (TUNING).
-    party_.front = {{
+    p.front = {{
         Combatant("Ruka", "Attacker", 30, 70,  9,
                   Skill("Ephemeral Cascade", SkillKind::Attack, 12, 9, 6, 100, 130).asEx()
                       .withDescription("Flits through the air to deal a 9-hit attack to a "
@@ -230,7 +230,7 @@ void Battle::start() {
                       .withDescription("Unleashes a valiant slash on all enemies, with a chance "
                                        "of restoring this unit's SP.")),
     }};
-    party_.back = {{
+    p.back = {{
         Combatant("Karen", "Blaster", 30, 55, 8,
                   Skill("Bloody Escapade",   SkillKind::Attack, 11, 10, 4, 100, 100)
                       .asEx().withDevMult(kBlasterSignatureDevMult)
@@ -257,6 +257,11 @@ void Battle::start() {
                       .withDescription("Launches a focused shot on an enemy, with a chance of "
                                        "restoring this unit's SP.")),
     }};
+    return p;
+}
+
+void Battle::start() {
+    party_ = hasPartyOverride_ ? partyOverride_ : makeDefaultParty();
 
     // TUNING: fase 1 dibuat lebih santai (DP/HP lebih rendah) sebagai kontras untuk fase Awaken.
     enemy_ = Combatant("Hellspider", "Boss", 55, 500, 0, Skill(), Skill());

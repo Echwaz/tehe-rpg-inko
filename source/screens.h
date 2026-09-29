@@ -3,6 +3,7 @@
 // draw untuk layar atas (visual) dan layar bawah (sentuh).
 #include "combat.h"
 #include "dialogue.h"
+#include "party_config.h"
 #include "ui.h"
 
 class DialogueScreen {
@@ -29,8 +30,50 @@ private:
     int           frame_        = 0;
 };
 
+// Layar Custom Party: ganti nama karakter serta nilai dan efek skill (lihat party_config.h).
+// Dibuka dari main.cpp lewat SELECT saat dialog. Tiga halaman: daftar karakter -> satu karakter
+// -> satu skill. Perubahan disimpan ke party.cfg oleh main.cpp saat layar ditutup.
+class CustomizeScreen {
+public:
+    void enter(const party_config::PartyConfig& cfg);
+    void update(const TouchState& touch, u32 keysDown);
+    void drawTop(TextRenderer& text) const;
+    void drawBottom(TextRenderer& text) const;
+    bool wantsExit() const { return exit_; }
+    const party_config::PartyConfig& config() const { return cfg_; }
+
+private:
+    enum class Page { Roster, Character, Skill };
+
+    void buildButtons();
+    void handle(int buttonId);
+    void goBack();
+    void rename();
+    void say(const char* msg);
+
+    void drawRoster(TextRenderer& text) const;
+    void drawCharacter(TextRenderer& text) const;
+    void drawSkill(TextRenderer& text) const;
+
+    party_config::PartyConfig cfg_;
+    ButtonGroup buttons_;
+    Page        page_ = Page::Roster;
+    int         ch_ = 0;               // karakter terpilih 0..5 (0..2 front bawaan, 3..5 back bawaan)
+    int         sk_ = 0;               // skill terpilih 0..1
+    bool        exit_ = false;
+    bool        confirmReset_ = false; // "Reset All" butuh dua ketukan
+    int         frame_ = 0;
+    std::string toast_;
+    int         toastFrame_ = -1000;
+};
+
 class BattleScreen {
 public:
+    // Party kustom untuk battle berikutnya (dipanggil sebelum enter()). Tanpa panggilan ini
+    // dipakai roster bawaan.
+    void setPartyConfig(const party_config::PartyConfig& cfg) {
+        battle_.setPartyOverride(party_config::buildParty(cfg));
+    }
     void enter();
     void update(const TouchState& touch, u32 keysDown, u32 keysHeld);
     bool drawScene3d(C3D_RenderTarget* target) const;

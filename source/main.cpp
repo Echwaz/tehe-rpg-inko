@@ -7,11 +7,15 @@
 #include "assets.h"
 #include "audio.h"
 #include "battle3d.h"
+#include "party_config.h"
 #include "screens.h"
 #include "sfx.h"
 #include "ui.h"
 
-enum class GameState { Dialogue, Battle };
+enum class GameState { Dialogue, Customize, Battle };
+
+// Party kustom (nama karakter, nilai dan efek skill). Dibuat/diubah lewat layar Customize.
+static const char* const kPartyPath = "sdmc:/3ds/Tehe-RPG-inko/party.cfg";
 
 int main(int /*argc*/, char** /*argv*/) {
     gfxInitDefault();
@@ -35,28 +39,48 @@ int main(int /*argc*/, char** /*argv*/) {
     TouchState     touch;
     DialogueScreen dialogue;
     BattleScreen   battle;
+    CustomizeScreen customize;
     GameState      state = GameState::Dialogue;
     BattlePhase    prevBattlePhase = BattlePhase::Planning;
     const bool audioReady = audio::init();
     sfx::init(audioReady);
+    // Berkas belum ada = roster bawaan. Berkas rusak tidak fatal: nilainya dijepit/diganti bawaan.
+    party_config::PartyConfig partyCfg;
+    party_config::load(kPartyPath, partyCfg);
     dialogue.enter();
     audio::play(audio::Track::Dialogue);
 
     while (aptMainLoop()) {
         hidScanInput();
         const u32 kDown = hidKeysDown();
-        if (kDown & KEY_START) break;
+        if (kDown & KEY_START) {
+            // Jangan buang hasil edit kalau app ditutup di tengah layar Customize.
+            if (state == GameState::Customize) party_config::save(kPartyPath, customize.config());
+            break;
+        }
         touch.update();
         const u32 kHeld = hidKeysHeld();
 
         switch (state) {
         case GameState::Dialogue:
             dialogue.update(touch, kDown);
-            if (dialogue.done()) {
+            if (kDown & KEY_SELECT) {
+                customize.enter(partyCfg);
+                state = GameState::Customize;
+            } else if (dialogue.done()) {
+                battle.setPartyConfig(partyCfg);
                 battle.enter();
                 state = GameState::Battle;
                 prevBattlePhase = battle.phase();
                 audio::play(audio::Track::Battle);
+            }
+            break;
+        case GameState::Customize:
+            customize.update(touch, kDown);
+            if (customize.wantsExit()) {
+                partyCfg = customize.config();
+                party_config::save(kPartyPath, partyCfg);   // gagal simpan (SD terkunci) tidak fatal
+                state = GameState::Dialogue;                // dialog lanjut dari baris terakhir
             }
             break;
         case GameState::Battle:
@@ -83,9 +107,9 @@ int main(int /*argc*/, char** /*argv*/) {
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         text.beginFrame();
 
-        const bool scene3d = state == GameState::Dialogue
-                                 ? dialogue.drawScene3d(top)
-                                 : battle.drawScene3d(top);
+        const bool scene3d = state == GameState::Dialogue  ? dialogue.drawScene3d(top)
+                           : state == GameState::Customize ? false
+                                                           : battle.drawScene3d(top);
         if (scene3d) {
             // Selesaikan perintah 3D dulu, lalu bersihkan HANYA depth untuk HUD.
             // Membersihkan warna di sini akan menghapus arena dan bos.
@@ -98,13 +122,20 @@ int main(int /*argc*/, char** /*argv*/) {
         C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA,
                        GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
         C2D_SceneBegin(top);
-        if (state == GameState::Dialogue) dialogue.drawTop(text);
-        else                              battle.drawTop(text, scene3d);
+        if (state == GameState::Dialogue)       dialogue.drawTop(text);
+        else if (state == GameState::Customize) customize.drawTop(text);
+        else                                    battle.drawTop(text, scene3d);
 
         C2D_TargetClear(bottom, colors::panel);
         C2D_SceneBegin(bottom);
-        if (state == GameState::Dialogue) dialogue.drawBottom(text);
-        else                              battle.drawBottom(text);
+        if (state == GameState::Dialogue) {
+            dialogue.drawBottom(text);
+            text.drawRight("SELECT: Custom Party", 312, 229, 0.3f, colors::grey);
+        } else if (state == GameState::Customize) {
+            customize.drawBottom(text);
+        } else {
+            battle.drawBottom(text);
+        }
 
         C3D_FrameEnd(0);
     }
