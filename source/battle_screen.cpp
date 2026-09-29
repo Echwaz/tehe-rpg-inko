@@ -886,8 +886,8 @@ void BattleScreen::updateButtonsInput(u32 keysDown, u32 keysHeld) {
     if (menu_ == Menu::Plan) {
         if (!planRowValid(menuCursor_)) menuCursor_ = 0;
 
-        if ((keysDown & KEY_L) && slot_ > 0) { --slot_; if (!planRowValid(menuCursor_)) menuCursor_ = 0; }
-        if ((keysDown & KEY_R) && slot_ < 2) { ++slot_; if (!planRowValid(menuCursor_)) menuCursor_ = 0; }
+        if (keysDown & KEY_L) { slot_ = (slot_ + 2) % 3; if (!planRowValid(menuCursor_)) menuCursor_ = 0; }
+        if (keysDown & KEY_R) { slot_ = (slot_ + 1) % 3; if (!planRowValid(menuCursor_)) menuCursor_ = 0; }
 
         if (up)   do { menuCursor_ = (menuCursor_ + 2) % 3; } while (!planRowValid(menuCursor_));
         if (down) do { menuCursor_ = (menuCursor_ + 1) % 3; } while (!planRowValid(menuCursor_));
