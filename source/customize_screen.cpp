@@ -34,6 +34,48 @@ const int   kToastFrames = 150;
 
 float rowY(int visibleIndex) { return kRowY0 + visibleIndex * kRowStep; }
 
+// Tombol bulat di ujung kiri/kanan tiap baris nilai. Angka memakai - dan +, pilihan (Class,
+// Bonus, Effect, Target) memakai panah kiri/kanan. Digambar sendiri (bukan lewat ButtonGroup::draw).
+const float kBtnR = 8.5f;                       // radius gambar; lebih kecil dari tinggi baris
+const float kBtnHit = 22.f;                     // kotak area sentuh (lingkaran r = 11), lebih lega dari gambar
+const float kBtnCxL = 176.f, kBtnCxR = 284.f;   // pusat tombol kiri dan kanan
+
+enum class Glyph { Minus, Plus, Left, Right };
+
+bool isChoiceField(SkillField f) {
+    return f == SkillField::Bonus || f == SkillField::FxType || f == SkillField::FxScope;
+}
+
+void addRoundButton(ButtonGroup& g, int id, float cx, float cy, bool enabled) {
+    g.add(id, cx - kBtnHit * 0.5f, cy - kBtnHit * 0.5f, kBtnHit, kBtnHit, "", enabled, 0, 0.6f, true);
+}
+
+void drawRoundButton(float cx, float cy, bool enabled, bool pressed, Glyph g) {
+    cy += pressed ? 1.5f : 0.f;
+    const u32 accent = enabled ? colors::pink : colors::grey;
+    const u32 fill = mixColor(colors::bg, accent, pressed ? 0.50f : (enabled ? 0.22f : 0.06f));
+    drawDisc(cx, cy, kBtnR, accent, kZPanel);
+    drawDisc(cx, cy, kBtnR - 1.6f, fill, kZPanel + 0.01f);
+
+    const u32 ink = enabled ? colors::white : colors::grey;
+    const float z = kZPanel + 0.02f;
+    switch (g) {
+    case Glyph::Minus:
+        C2D_DrawRectSolid(cx - 4.f, cy - 1.f, z, 8.f, 2.f, ink);
+        break;
+    case Glyph::Plus:
+        C2D_DrawRectSolid(cx - 4.f, cy - 1.f, z, 8.f, 2.f, ink);
+        C2D_DrawRectSolid(cx - 1.f, cy - 4.f, z, 2.f, 8.f, ink);
+        break;
+    case Glyph::Left:
+        C2D_DrawTriangle(cx + 2.5f, cy - 4.5f, ink, cx + 2.5f, cy + 4.5f, ink, cx - 3.5f, cy, ink, z);
+        break;
+    case Glyph::Right:
+        C2D_DrawTriangle(cx - 2.5f, cy - 4.5f, ink, cx - 2.5f, cy + 4.5f, ink, cx + 3.5f, cy, ink, z);
+        break;
+    }
+}
+
 // Kecilkan skala teks supaya lebarnya tidak melebihi maxW (nama kustom bisa panjang atau lebar).
 float fitScale(TextRenderer& text, const std::string& s, float base, float maxW) {
     const float w = text.width(s.c_str(), base);
@@ -137,8 +179,8 @@ void CustomizeScreen::buildButtons() {
         buttons_.add(BtnRename, 218, 14, 92, 30, "Rename", true, colors::cyan, 0.45f);
         buttons_.add(BtnSkill0, 10, 64, 300, 42, "", true, 0);
         buttons_.add(BtnSkill0 + 1, 10, 112, 300, 42, "", true, 0);
-        buttons_.add(BtnClassMinus, 160, kClassRowY, 32, kRowH, "-", true, colors::pink, 0.6f);
-        buttons_.add(BtnClassPlus,  268, kClassRowY, 32, kRowH, "+", true, colors::pink, 0.6f);
+        addRoundButton(buttons_, BtnClassMinus, kBtnCxL, kClassRowY + kRowH * 0.5f, true);
+        addRoundButton(buttons_, BtnClassPlus,  kBtnCxR, kClassRowY + kRowH * 0.5f, true);
         buttons_.add(BtnResetChar, 10, kFootY, 96, kFootH, "Reset", true, colors::cyan, 0.45f);
         buttons_.add(BtnBack, 214, kFootY, 96, kFootH, "Back", true, colors::pink, 0.5f);
         break;
@@ -150,8 +192,8 @@ void CustomizeScreen::buildButtons() {
         for (int f = 0; f < kSkillFieldCount; ++f) {
             const SkillField field = static_cast<SkillField>(f);
             if (!fieldVisible(s, field)) continue;
-            buttons_.add(BtnMinus0 + f, 160, rowY(k), 32, kRowH, "-", canStep(s, field, -1), colors::pink, 0.6f);
-            buttons_.add(BtnPlus0 + f, 268, rowY(k), 32, kRowH, "+", canStep(s, field, +1), colors::pink, 0.6f);
+            addRoundButton(buttons_, BtnMinus0 + f, kBtnCxL, rowY(k) + kRowH * 0.5f, canStep(s, field, -1));
+            addRoundButton(buttons_, BtnPlus0 + f,  kBtnCxR, rowY(k) + kRowH * 0.5f, canStep(s, field, +1));
             ++k;
         }
         buttons_.add(BtnResetSkill, 10, kSkillFootY, 96, kSkillFootH, "Reset", true, colors::cyan, 0.45f);
@@ -281,7 +323,7 @@ void CustomizeScreen::drawTop(TextRenderer& text) const {
     } else {
         const char* hint = page_ == Page::Roster ? "Tap a character to edit. Done saves your party."
                          : page_ == Page::Character ? "Tap a skill to edit it. Class is only a label."
-                                                    : "Use - and + to change values. Bonus picks HP, DP or DEV.";
+                                                    : "Use - and + for numbers, the arrows to pick an option.";
         text.drawCentered(hint, 200, 230, 0.32f, colors::grey);
     }
 }
@@ -346,6 +388,8 @@ void CustomizeScreen::drawCharacter(TextRenderer& text) const {
 
     drawPill(8, kClassRowY, 304, kRowH, mixColor(colors::bg, colors::cyan, 0.10f),
              mixColor(colors::bg, colors::cyan, 0.35f), kZPanel - 0.02f);
+    drawRoundButton(kBtnCxL, kClassRowY + kRowH * 0.5f, true, buttons_.pressed(BtnClassMinus), Glyph::Left);
+    drawRoundButton(kBtnCxR, kClassRowY + kRowH * 0.5f, true, buttons_.pressed(BtnClassPlus), Glyph::Right);
     text.drawShadow("Class", 18, kClassRowY + 3, 0.4f, colors::white);
     text.drawCentered(c.role.c_str(), 230, kClassRowY + kRowH * 0.5f, 0.42f, colors::yellow);
     text.drawCentered("Class is just a label. Bonuses are set per skill.", 160, 190, 0.32f, colors::grey);
@@ -367,6 +411,12 @@ void CustomizeScreen::drawSkill(TextRenderer& text) const {
         const float y = rowY(k++);
         drawPill(8, y, 304, kRowH, mixColor(colors::bg, colors::cyan, 0.10f),
                  mixColor(colors::bg, colors::cyan, 0.35f), kZPanel - 0.02f);
+        // Lingkaran dulu, sebelum teks. Angka: - dan +. Pilihan (Bonus, Effect, Target): panah.
+        const bool choice = isChoiceField(field);
+        drawRoundButton(kBtnCxL, y + kRowH * 0.5f, canStep(s, field, -1), buttons_.pressed(BtnMinus0 + f),
+                        choice ? Glyph::Left : Glyph::Minus);
+        drawRoundButton(kBtnCxR, y + kRowH * 0.5f, canStep(s, field, +1), buttons_.pressed(BtnPlus0 + f),
+                        choice ? Glyph::Right : Glyph::Plus);
         text.drawShadow(fieldLabel(s, field), 18, y + 3, 0.4f, colors::white);
         text.drawCentered(fieldText(s, field).c_str(), 230, y + kRowH * 0.5f, 0.42f, colors::yellow);
     }
