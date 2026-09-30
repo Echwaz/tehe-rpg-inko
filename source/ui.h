@@ -125,6 +125,7 @@ public:
     // (mis. kartu slot dengan ikon) dan memakai pressed() untuk efek tekan.
     void draw(TextRenderer& text) const;
     bool pressed(int id) const { return id == pressedId_ && inside_; }
+    void setOutline(u32 color) { outline_ = color; }
 
 private:
     int  hitId(int px, int py) const;
@@ -133,6 +134,7 @@ private:
     std::vector<Button> buttons_;
     int  pressedId_ = kNone;
     bool inside_    = false;
+    u32  outline_   = 0;
 };
 
 

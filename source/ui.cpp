@@ -171,7 +171,8 @@ void ButtonGroup::draw(TextRenderer& text) const {
         const u32 accent = b.enabled ? b.color : colors::grey;
         const u32 fill = mixColor(colors::bg, accent,
                                   isPressed ? 0.50f : (b.enabled ? 0.22f : 0.06f));
-        drawPill(b.x, b.y + off, b.w, b.h - off, fill, accent, kZPanel);
+        const u32 border = (b.enabled && outline_ != 0) ? outline_ : accent;
+        drawPill(b.x, b.y + off, b.w, b.h - off, fill, border, kZPanel);
         text.drawCentered(b.label.c_str(), b.x + b.w * 0.5f, b.y + b.h * 0.5f + off * 0.5f, b.scale,
                           b.enabled ? colors::white : colors::grey);
     }

@@ -166,6 +166,7 @@ void CustomizeScreen::say(const char* msg) {
 
 void CustomizeScreen::buildButtons() {
     buttons_.begin();
+    buttons_.setOutline(colors::white); 
     switch (page_) {
     case Page::Roster:
         for (int i = 0; i < kRosterSize; ++i)
