@@ -15,7 +15,7 @@ const char* const kPaths[] = { nullptr, "sdmc:/3ds/Tehe-RPG-inko/assets/bgm_dial
                                           "sdmc:/3ds/Tehe-RPG-inko/assets/bgm_battle.ogg",
                                           "sdmc:/3ds/Tehe-RPG-inko/assets/bgm_awaken.ogg" };
 
-const float kMasterVolume = 0.8f;      // 0..1, volume musik latar
+const float kMasterVolume = 0.8f;
 const float kFadeInMs     = 600.f;
 const float kFadeOutMs    = 400.f;
 

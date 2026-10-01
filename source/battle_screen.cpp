@@ -148,11 +148,11 @@ u32 mix50(u32 a, u32 b) { return mixColor(a, b, 0.5f); }
 // dipotong bulat (sudut transparan). Tanpa gambar: lingkaran berwarna dengan huruf depan nama.
 void drawCharIcon(TextRenderer& text, const Combatant& c, float cx, float cy, float d, float z,
                   u32 tint) {
-    if (assets::drawIcon(assets::charFromName(c.name), cx - d * 0.5f, cy - d * 0.5f, d, d, z, tint))
+    if (assets::drawIcon(assets::charFromName(c.key), cx - d * 0.5f, cy - d * 0.5f, d, d, z, tint))
         return;
     drawDisc(cx, cy, d * 0.5f, tint ? mix50(colors::ally, tint) : colors::ally,
              std::min(z, kZText - 0.02f));
-    const char initial[2] = { c.name.empty() ? '?' : c.name[0], '\0' };
+    const char initial[2] = { c.key.empty() ? '?' : c.key[0], '\0' };   // huruf pengenal tetap, bukan nama kustom (bisa UTF-8)
     text.drawCentered(initial, cx, cy, d / 60.f, colors::white);
 }
 
@@ -226,8 +226,8 @@ void drawBadgeDefDown(float cx, float cy, float scale = 1.f) {
     const float z = kZBadge + 0.01f;
     const float kShield = 1.3f;
     const float s = scale * kShield;
-    const float ox  = snapPx(cx - 2.2f * scale);          // sumbu tengah perisai
-    const float hw  = std::round(2.2f * s);               // setengah lebar, bilangan bulat
+    const float ox  = snapPx(cx - 2.2f * scale);
+    const float hw  = std::round(2.2f * s);
     const float ax0 = ox - hw, ax1 = ox + hw;
     const float ay0 = snapPx(cy - 1.0f * scale - 2.7f * s);
     const float ay1 = ay0 + std::round(2.6f * s);
@@ -292,7 +292,12 @@ void drawPartyUnit(TextRenderer& text, const Combatant& c, int i, float dx, int 
     text.drawOutlined(buf, u.x0 + 46, u.cy - 35, 0.6f, colors::white, colors::pinkDeep, 1.5f);
 
     const float tx = u.x0 + 72;
-    text.drawShadow(c.name.c_str(), tx, u.cy - 25, 0.42f, colors::white);
+    // Nama bisa diganti pemain (Custom Party) dan bisa lebar (kana/kanji): kecilkan supaya tidak
+    // menabrak kotak anggota di sebelahnya. Ruang yang tersedia sekitar 60 px.
+    float nameScale = 0.42f;
+    const float nameW = text.width(c.name.c_str(), nameScale);
+    if (nameW > 58.f) nameScale = std::max(0.3f, nameScale * 58.f / nameW);
+    text.drawShadow(c.name.c_str(), tx, u.cy - 25, nameScale, colors::white);
     // Angka DP disembunyikan saat 0 (musuh sedang break tidak dianggap "DP 0" secara eksplisit);
     // bar-nya tetap digambar kosong sebagai penanda visual.
     if (c.dp > 0) {
@@ -330,13 +335,13 @@ const float kBossFxX = 270.f, kBossFxY = 80.f;
 
 const float kOdBadgeR  = 18.f;
 const float kOdBadgeCy = 24.f;
-const float kOdBadgeCx = kTopWidth - 6.f - kOdBadgeR;            // 376: badge nempel tepi kanan layar
+const float kOdBadgeCx = kTopWidth - 6.f - kOdBadgeR;
 const float kOdBarH = 12.f;
 const float kOdBarY = kOdBadgeCy - kOdBarH * 0.5f;
 const float kOdBarW = 100.f;
 const float kOdBarX = kOdBadgeCx - kOdBadgeR + 8.f - kOdBarW;    // nempel & dikit tertimpa badge
 
-const int   kFxLife       = 60;    // efek dibuang setelah sekian frame sejak mulai
+const int   kFxLife       = 60;
 const int   kNumberLife   = 38;
 const int   kBreakLife    = 40;
 const int   kRingLife     = 22;
@@ -346,10 +351,11 @@ const int   kShakeLife    = 10;
 const int   kSlashLife    = 10;
 const int   kShotTravel   = 7;
 const int   kShotSpark    = 7;
-const int   kShotLife     = kShotTravel + kShotSpark;   // senjata jarak jauh (Yuki, Tsukasa)
+const int   kShotLife     = kShotTravel + kShotSpark;
 const float kZFx          = 0.65f; // bentuk efek: di atas semua teks (kZText = 0.60)
 
 // Yuki dan Tsukasa pakai senjata jarak jauh (busur/senapan), jadi hit-nya berupa peluru yang
+// (dicek lewat Combatant::key, bukan name, supaya tetap benar setelah pemain mengganti nama)
 // melesat dari potret ke bos, bukan goresan di tempat seperti karakter jarak dekat.
 bool isRangedAttacker(const std::string& name) { return name == "Yuki" || name == "Tsukasa"; }
 u32  rangedColor(const std::string& name) { return name == "Yuki" ? colors::cyanLight : colors::yellow; }
@@ -437,7 +443,7 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
         case FxKind::Damage:
             if (e.on_enemy) {
                 const bool ranged = e.attacker_slot >= 0 && e.attacker_slot < 3 &&
-                    isRangedAttacker(battle_.party().front[e.attacker_slot].name);
+                    isRangedAttacker(battle_.party().front[e.attacker_slot].key);
                 sfx::play(ranged ? sfx::Id::HitRanged : sfx::Id::HitMelee);
             } else {
                 sfx::play(sfx::Id::AllyHit);
@@ -449,7 +455,6 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
         }
     }
 
-    // Teks digambar dulu, bentuk efek di atasnya
     for (const FxItem& it : fx_) {
         const FxEvent& e = it.ev;
         const int age = frame_ - it.start;
@@ -514,12 +519,12 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
         if (age < 0) continue;
 
         const bool ranged = e.attacker_slot >= 0 && e.attacker_slot < 3 &&
-            isRangedAttacker(battle_.party().front[e.attacker_slot].name);
+            isRangedAttacker(battle_.party().front[e.attacker_slot].key);
 
         if (e.kind == FxKind::Damage && e.on_enemy && ranged && age < kShotLife) {
             const UnitPos u = unitPos(e.attacker_slot);
             const float tx = bossX + bossJitter(e), ty = bossY;
-            const u32 col = rangedColor(battle_.party().front[e.attacker_slot].name);
+            const u32 col = rangedColor(battle_.party().front[e.attacker_slot].key);
             if (age < kShotTravel) {
                 const float t = easeOut(static_cast<float>(age) / kShotTravel);
                 const float tailT = std::max(0.f, t - 0.35f);
@@ -585,7 +590,6 @@ void BattleScreen::enter() {
     keyHoldStartFrame_ = -1;
     keyHoldFired_ = false;
 
-    // Snap semua bar ke nilai awal (bukan animasi dari 0) saat battle baru mulai.
     for (int i = 0; i < 3; ++i) {
         allyDpAnim_[i].snap(battle_.party().front[i].dp);
         allyHpAnim_[i].snap(battle_.party().front[i].hp);
@@ -859,7 +863,7 @@ void BattleScreen::update(const TouchState& touch, u32 keysDown, u32 keysHeld) {
     if (hit == ButtonGroup::kNone) return;
     if (suppressNextSkillHit_) {
         suppressNextSkillHit_ = false;
-        if (hit == BtnSkill0 || hit == BtnSkill0 + 1) return;    // sudah dipakai gesture, abaikan
+        if (hit == BtnSkill0 || hit == BtnSkill0 + 1) return;
     }
 
     handle(hit);
@@ -935,7 +939,7 @@ void BattleScreen::updateButtonsInput(u32 keysDown, u32 keysHeld) {
                 else { doSwap(selected_, swapCursor_); selected_ = -1; }
             }
         } else {
-            if (up) confirmFocus_ = false;   // balik ke baris bawah kotak swap
+            if (up) confirmFocus_ = false;
             if (keysDown & KEY_A) handle(BtnConfirm);
         }
         if (keysDown & (KEY_Y | KEY_B)) { menu_ = Menu::Plan; resetSwapState(); }
@@ -1125,7 +1129,7 @@ void BattleScreen::drawPlanning(TextRenderer& text) const {
     const Command& cmd = battle_.command(slot_);
 
     for (int k = 0; k < 3; ++k) {
-        const int j = k - 1;                                   // indeks skill, -1 = Attack
+        const int j = k - 1;
         if (j >= 0 && !c.skills[j].valid()) continue;
         const bool isAttack = (k == 0);
         const bool enabled = isAttack || battle_.canUseSkill(slot_, j);
@@ -1220,7 +1224,7 @@ void BattleScreen::drawSwapScreen(TextRenderer& text) const {
 
     for (int id = 0; id < 6; ++id) {
         const float cx = swapX(id) + kSwapTile * 0.5f, cy = swapY(id) + kSwapTile * 0.5f;
-        const float r = (id < 3) ? 26.f : 22.f;                      // front lebih besar dari back
+        const float r = (id < 3) ? 26.f : 22.f;
         const bool lifted = dragging_ && id == dragFrom_;
         const bool picked = (id == selected_ || lifted);
         const bool over = (dragging_ && id == hover);
@@ -1299,10 +1303,13 @@ void BattleScreen::drawSkillDetail(TextRenderer& text) const {
         y += 20.f;
     };
 
-    for (const std::string& wrapped : wrapText(text, s.description, 0.4f, 276.f)) line(wrapped);
+    std::string desc = s.description;
+    const char* tag = skillTag(s);
+    if (tag[0]) { if (!desc.empty()) desc += ' '; desc += tag; }
+    for (const std::string& wrapped : wrapText(text, desc, 0.4f, 276.f)) line(wrapped);
 
     if (s.kind == SkillKind::Attack) {
-        const int mult = (s.dev_mult > 0) ? s.dev_mult : c.dev_mult;
+        const int mult = s.dev_mult;
         if (mult > 1) {
             std::snprintf(buf, sizeof buf, "Increases enemy devastation rate %dx faster", mult);
             line(buf);

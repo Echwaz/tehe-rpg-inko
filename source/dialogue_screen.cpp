@@ -8,9 +8,9 @@
 namespace {
 
 enum ButtonId {
-    BtnLog = 1, BtnSkip, BtnHide,                   // deretan tombol saat dialog berjalan
+    BtnLog = 1, BtnSkip, BtnHide,
     BtnDeadZone, BtnTapArea,                        // zona mati di sekitar deretan tombol, dan area ketuk = lanjut
-    BtnLogUp = 10, BtnLogDown, BtnLogClose          // tampilan Log
+    BtnLogUp = 10, BtnLogDown, BtnLogClose
 };
 
 const int   kLogSlots         = 4;     // jumlah baris dialog yang tampil sekaligus di Log
@@ -26,7 +26,7 @@ const float kZCircle = 0.32f;                                  // blok lingkaran
 // Deretan tiga lingkaran polos (tanpa label) di kiri bawah, dijangkau jempol kiri.
 // Titik awal dan garis tengahnya sejajar tombol Swap di layar battle (cx=40, cy=209).
 const float kIconR = 22.f, kIconCy = 209.f;
-float iconCx(int i) { return 40.f + i * 58.f; }                 // LOG, SKIP, HIDE
+float iconCx(int i) { return 40.f + i * 58.f; }
 // Zona mati di sekeliling deretan: ketukan yang meleset ke sela tombol tidak dianggap "lanjut".
 const float kGroupX = 10.f, kGroupY = 179.f, kGroupW = 176.f, kGroupH = 61.f;
 const int   kHintLines = 2;    // petunjuk "ketuk layar untuk lanjut" hanya tampil di dua baris pertama
@@ -113,7 +113,7 @@ void DialogueScreen::enter() {
 void DialogueScreen::openLog() {
     mode_ = Mode::Log;
     const std::size_t n = scene_.historyCount();
-    logTop_ = (n > static_cast<std::size_t>(kLogSlots)) ? n - kLogSlots : 0;   // mulai dari yang terbaru
+    logTop_ = (n > static_cast<std::size_t>(kLogSlots)) ? n - kLogSlots : 0;
 }
 
 void DialogueScreen::update(const TouchState& touch, u32 keysDown) {

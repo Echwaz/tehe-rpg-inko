@@ -18,8 +18,8 @@ void TouchState::update() {
     if (held) {
         touchPosition tp;
         hidTouchRead(&tp);
-        x = tp.px;   // koordinat layar bawah: 0..319
-        y = tp.py;   //                        0..239
+        x = tp.px;
+        y = tp.py;
     }
     // Saat ended, x/y masih berisi posisi frame sebelumnya.
 }
@@ -171,7 +171,13 @@ void ButtonGroup::draw(TextRenderer& text) const {
         const u32 accent = b.enabled ? b.color : colors::grey;
         const u32 fill = mixColor(colors::bg, accent,
                                   isPressed ? 0.50f : (b.enabled ? 0.22f : 0.06f));
-        drawPill(b.x, b.y + off, b.w, b.h - off, fill, accent, kZPanel);
+        u32 border = accent;
+        u32 fillColor = fill;
+        if (battleStyle_) {
+            fillColor = mixColor(colors::bg, colors::pink, isPressed ? 0.34f : (b.enabled ? 0.10f : 0.04f));
+            border = mixColor(colors::bg, colors::white, b.enabled ? 0.45f : 0.2f);
+        }
+        drawPill(b.x, b.y + off, b.w, b.h - off, fillColor, border, kZPanel);
         text.drawCentered(b.label.c_str(), b.x + b.w * 0.5f, b.y + b.h * 0.5f + off * 0.5f, b.scale,
                           b.enabled ? colors::white : colors::grey);
     }

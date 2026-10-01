@@ -28,7 +28,7 @@ constexpr int kCount = static_cast<int>(Id::Count);
 static_assert(sizeof(kPaths) / sizeof(kPaths[0]) == kCount, "kPaths harus sejajar dengan enum Id");
 
 const float kVolume        = 0.9f;
-const int   kFirstChannel  = 1;      // kanal 0 dipakai audio:: (musik latar)
+const int   kFirstChannel  = 1;
 const int   kNumChannels   = 3;      // SFX yang tumpang tindih lebih dari ini menimpa yang tertua
 const long  kMaxClipFrames = 48000 * 10;   // jaga-jaga: tolak file "SFX" yang ternyata sangat panjang
 

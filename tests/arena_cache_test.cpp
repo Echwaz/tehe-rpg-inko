@@ -72,10 +72,10 @@ static void testCinematicShots() {
     frame(Shot::Battle, 2);
     for (int f = 0; f < 420; ++f)
         frame(select(true,false,-1,f), f < defeat_cutscene::TreeStart ? 3 : 4);
-    assert(arenaDraws == 4); // 1 awaken + 1 battle + 2 death shots
+    assert(arenaDraws == 4);
     for (int f = 0; f < 120; ++f) frame(select(true,false,-1,420), 4);
     assert(arenaDraws == 4);
-    frame(select(true,false,-1,-1), 5); // restart invalidates tree snapshot
+    frame(select(true,false,-1,-1), 5);
     assert(arenaDraws == 5);
     cache.release();
     assert(allocations.empty());
@@ -120,7 +120,7 @@ int main() {
         // but not in front of the nearer building (200).
         assert(100 >= depth[0] && !(100 >= depth[1]));
         color[0] = 999999;
-        std::fill(depth.begin(), depth.end(), 0); // HUD clears depth every frame
+        std::fill(depth.begin(), depth.end(), 0);
     }
     cache.invalidate();
     assert(!cache.restore(fb));
@@ -160,7 +160,7 @@ int main() {
     // A new framebuffer layout triggers reallocation and a new snapshot.
     failAllocation = -1;
     fb.width = 320;
-    fb.height = 240; // fits the existing test storage
+    fb.height = 240;
     assert(cache.prepare(fb) && !cache.valid());
     cache.capture(fb);
     finishFrame();

@@ -1,6 +1,7 @@
 #include "combat.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 
@@ -45,8 +46,8 @@ AttackSummary performAttack(const Skill& s, const Combatant& att, Combatant& t) 
     const int atkUp   = s.is_basic ? 0 : effectTotal(att, EffectType::AtkUp);
     const int atkDown = std::min(kMaxAtkDownPct, effectTotal(att, EffectType::AtkDown));
     const int devUp  = s.is_basic ? 0 : effectTotal(att, EffectType::DevUp);
-    // Devastation rate per hit = dasar x pengali (dari skill, atau dari karakter jika skill tidak menetapkan).
-    const int devMult = std::max(1, s.dev_mult > 0 ? s.dev_mult : att.dev_mult);
+    // Devastation rate per hit = dasar x pengali milik skill (bukan milik role/karakter).
+    const int devMult = std::max(1, s.dev_mult);
     const int defDown = effectTotal(t, EffectType::DefDown);
     const int defUp   = std::min(kMaxDefUpPct, effectTotal(t, EffectType::DefUp));
 
@@ -91,7 +92,7 @@ AttackSummary performAttack(const Skill& s, const Combatant& att, Combatant& t) 
 
     if (s.stun_chance > 0 && t.is_enemy && t.alive() && std::rand() % 100 < s.stun_chance) {
         t.stunned = true;
-        ++t.stun_skips;                              // menumpuk dengan stun dari break/skill lain
+        ++t.stun_skips;
         sum.stunned = true;
     }
     return sum;
@@ -110,7 +111,7 @@ void addEffect(Combatant& c, EffectType type, int value, int turns) {
     int count = 0;
     for (const auto& e : c.effects)
         if (e.type == type) ++count;
-    if (count >= kMaxEffectStacks) {                 // penuh: tumpukan tertua diganti
+    if (count >= kMaxEffectStacks) {
         for (auto it = c.effects.begin(); it != c.effects.end(); ++it) {
             if (it->type == type) { c.effects.erase(it); break; }
         }
@@ -200,52 +201,83 @@ void healPartyDP(Party& p, int amount) {
     auto healOne = [amount](Combatant& c) {
         if (!c.alive()) return;
         c.dp = std::min(c.max_dp, c.dp + amount);
-        if (c.dp > 0) c.broken = false;              // heal DP = pulih dari break
+        if (c.dp > 0) c.broken = false;
     };
     for (auto& c : p.front) healOne(c);
     for (auto& c : p.back)  healOne(c);
 }
 
 
-void Battle::start() {
-    party_ = Party();
+const char* roleName(int idx) {
+    static const char* const kNames[kRoleCount] = { "Attacker", "Breaker", "Blaster",
+                                                    "Healer", "Buffer", "Debuffer" };
+    return idx >= 0 && idx < kRoleCount ? kNames[idx] : "";
+}
+
+int roleIndex(const char* name) {
+    if (!name) return -1;
+    for (int i = 0; i < kRoleCount; ++i) {
+        const char* a = name;
+        const char* b = roleName(i);
+        while (*a && *b && std::tolower(static_cast<unsigned char>(*a)) ==
+                           std::tolower(static_cast<unsigned char>(*b))) { ++a; ++b; }
+        if (!*a && !*b) return i;
+    }
+    return -1;
+}
+
+bool setRole(Combatant& c, const char* role) {
+    const int idx = roleIndex(role);
+    if (idx < 0) return false;
+    c.role = roleName(idx);
+    return true;
+}
+
+const char* skillTag(const Skill& s) {
+    if (s.kind != SkillKind::Attack) return "";
+    if (s.hp_pct > 100)  return "[HP Eff]";
+    if (s.dp_pct > 100)  return "[DP Eff]";
+    if (s.dev_mult > 1)  return "[High Devastation]";
+    return "";
+}
+
+Party makeDefaultParty() {
+    Party p;
     // Angka damage/SP adalah rancangan sendiri (TUNING).
-    party_.front = {{
+    p.front = {{
         Combatant("Ruka", "Attacker", 30, 70,  9,
-                  Skill("Ephemeral Cascade", SkillKind::Attack, 12, 9, 6, 100, 130).asEx()
+                  Skill("Ephemeral Cascade", SkillKind::Attack, 12, 9, 6).asEx().withBonus(SkillBonus::HpEff)
                       .withDescription("Flits through the air to deal a 9-hit attack to a "
-                                       "single enemy. [HP Eff]"),
-                  Skill("Cross Cut",         SkillKind::Attack, 6, 2, 8, 100, 130)
-                      .withDescription("Slashes an enemy with twin blades. [HP Eff]")),
+                                       "single enemy."),
+                  Skill("Cross Cut",         SkillKind::Attack, 6, 2, 8).withBonus(SkillBonus::HpEff)
+                      .withDescription("Slashes an enemy with twin blades.")),
         Combatant("Yuki", "Breaker", 20, 45, 12,
-                  Skill("Meteor Shower",     SkillKind::Attack, 11, 6, 8, 150, 100).asEx()
-                      .withDescription("Rains down a powerful salvo on all enemies. [DP Eff]"),
-                  Skill("Break Booster",     SkillKind::Attack, 4, 3, 7, 130, 100)
-                      .withDescription("Fires a salvo on all enemies. [DP Eff]")),
+                  Skill("Meteor Shower",     SkillKind::Attack, 11, 6, 8).asEx().withBonus(SkillBonus::DpEff)
+                      .withDescription("Rains down a powerful salvo on all enemies."),
+                  Skill("Break Booster",     SkillKind::Attack, 4, 3, 7).withBonus(SkillBonus::DpEff)
+                      .withDescription("Fires a salvo on all enemies.")),
         Combatant("Tama", "Healer", 30, 60, 7,
                   Skill("Resupply",          SkillKind::HealDP, 8, 0, 20).withUses(10)
                       .withDescription("Envelops all allies in a gentle aura that moderately "
                                        "restores their DP."),
-                  Skill("Saltire Slash",     SkillKind::Attack, 7, 2, 8, 100, 100).withSpGain(4, 50)
+                  Skill("Saltire Slash",     SkillKind::Attack, 7, 2, 8).withSpGain(4, 50)
                       .withDescription("Unleashes a valiant slash on all enemies, with a chance "
                                        "of restoring this unit's SP.")),
     }};
-    party_.back = {{
+    p.back = {{
         Combatant("Karen", "Blaster", 30, 55, 8,
-                  Skill("Bloody Escapade",   SkillKind::Attack, 11, 10, 4, 100, 100)
-                      .asEx().withDevMult(kBlasterSignatureDevMult)
-                      .withDescription("Deals a 10-hit slash attack from all directions "
-                                       "[High Devastation]."),
-                  Skill("Wild Fling",        SkillKind::Attack, 7, 3, 5, 100, 100)
-                      .withDescription("Hurls a scythe to chop up all enemies "
-                                       "[High Devastation]."))
-            .withDevMult(kBlasterDevMult),
+                  Skill("Bloody Escapade",   SkillKind::Attack, 11, 10, 4)
+                      .asEx().withBonus(SkillBonus::Devastation)
+                      .withDescription("Deals a 10-hit slash attack from all directions."),
+                  Skill("Wild Fling",        SkillKind::Attack, 7, 3, 5)
+                      .withBonus(SkillBonus::Devastation)
+                      .withDescription("Hurls a scythe to chop up all enemies.")),
         Combatant("Megumi", "Debuffer", 30, 60, 7,
-                  Skill("Excelsior Impact",  SkillKind::Attack, 10, 2, 8, 100, 100)
+                  Skill("Excelsior Impact",  SkillKind::Attack, 10, 2, 8)
                       .asEx().withStun(70)
                       .withDescription("Strikes from up high with a power that surpasses one's "
                                        "limits. Has a high chance to stun."),
-                  Skill("Hard Knocks",       SkillKind::Attack, 8, 1, 14, 100, 100)
+                  Skill("Hard Knocks",       SkillKind::Attack, 8, 1, 14)
                       .withEffect(EffectType::DefDown, 30, 1, EffectScope::Enemy)
                       .withDescription("Crushes down forcefully on a single enemy, reducing "
                                        "their DEF.")),
@@ -253,10 +285,15 @@ void Battle::start() {
                   makeSupport("Full Enhance", 9, EffectType::AtkUp, 40, 0, EffectScope::AllParty)
                       .withDescription("Awakens the potential of the entire squad, increasing "
                                        "their Skill ATK."),
-                  Skill("Blessed Shot",      SkillKind::Attack, 7, 1, 14, 100, 100).withSpGain(4, 50)
+                  Skill("Blessed Shot",      SkillKind::Attack, 7, 1, 14).withSpGain(4, 50)
                       .withDescription("Launches a focused shot on an enemy, with a chance of "
                                        "restoring this unit's SP.")),
     }};
+    return p;
+}
+
+void Battle::start() {
+    party_ = hasPartyOverride_ ? partyOverride_ : makeDefaultParty();
 
     // TUNING: fase 1 dibuat lebih santai (DP/HP lebih rendah) sebagai kontras untuk fase Awaken.
     enemy_ = Combatant("Hellspider", "Boss", 55, 500, 0, Skill(), Skill());
@@ -329,7 +366,7 @@ void Battle::recordHits(const AttackSummary& a, bool onEnemy, int slot, int base
             b.kind = FxKind::Break;
             b.on_enemy = onEnemy;
             b.slot = slot;
-            b.delay = delay + 2;                        // sesaat setelah angka hit yang memecahkan DP
+            b.delay = delay + 2;
             fx_.push_back(b);
             fxSpan_ = std::max(fxSpan_, b.delay);
         }
@@ -421,7 +458,7 @@ void Battle::swapFront(int a, int b) {
     if (phase_ != BattlePhase::Planning || a == b) return;
     if (a < 0 || a > 2 || b < 0 || b > 2) return;
     std::swap(party_.front[a], party_.front[b]);
-    std::swap(cmds_[a], cmds_[b]);                   // aksi ikut pindah bersama karakternya
+    std::swap(cmds_[a], cmds_[b]);
     message_ = party_.front[a].name + " and " + party_.front[b].name + " swap places.";
 }
 
@@ -513,7 +550,7 @@ void Battle::runPlayerAction(int slot) {
     if (cmd.type == CommandType::Skill) {
         const Skill& cand = c.skills[cmd.skill];
         if (cand.valid() && c.sp >= cand.sp_cost && c.uses_left[cmd.skill] != 0) {
-            s = cand;                                    // SP/pemakaian kurang: jatuh ke Attack
+            s = cand;
             usedIdx = cmd.skill;
         }
     }
@@ -549,7 +586,7 @@ void Battle::runPlayerAction(int slot) {
         report(c.name, s.name, s.is_basic, a);
         if (s.fx.type != EffectType::None && enemy_.alive()) applyFx(s.fx, c);
         if (s.sp_gain > 0 && std::rand() % 100 < s.sp_gain_chance) {
-            c.sp = gainSpCapped(c.sp, s.sp_gain, kMaxSP);   // gimmick turn biasa: cap tetap kMaxSP
+            c.sp = gainSpCapped(c.sp, s.sp_gain, kMaxSP);
             message_ += " " + c.name + "'s SP is restored!";
         }
     }
@@ -591,7 +628,7 @@ void Battle::updateExecution() {
         }
         return;
     }
-    timer_ = kStepDelay + fxSpan_;                   // tunggu angka hit beruntun selesai muncul
+    timer_ = kStepDelay + fxSpan_;
     fxSpan_ = 0;
 }
 
@@ -683,7 +720,6 @@ void Battle::updateAwakening() {
     enemyActPending_ = false;
     // Bos baru hanya mereset break, stun, devastation, dan debuff musuh.
     // HP, DP, SP, formasi, efek, dan sisa pemakaian skill party terbawa ke battle 2.
-    // TUNING: fase Awaken lebih tangguh lagi (DP 110->160, HP 950->1300).
     enemy_ = Combatant("Awaken Hellspider", "Boss", 160, 1300, 0, Skill(), Skill());
     enemy_.is_enemy = true;
     enemy_.sp = 0;

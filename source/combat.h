@@ -21,7 +21,11 @@
 //  - Musuh yang break: stun 1 giliran (aturan di atas). DP musuh TIDAK pulih sendiri; pemulihan hanya lewat
 //    gimmick khusus (belum ada), yang bisa memakai recoverFromBreak().
 //  - Devastation rate musuh HANYA naik oleh hit yang mengenai musuh yang sudah break.
-//    Blaster menaikkannya 4x-5x lebih cepat. Rate kembali ke 100% hanya jika musuh pulih dari break.
+//    Skill dengan dev_mult > 1 (skill milik Blaster) menaikkannya 4x-5x lebih cepat. Rate kembali
+//    ke 100% hanya jika musuh pulih dari break.
+//  - Role/class (Attacker, Breaker, Blaster, dst) hanyalah label, tanpa bonus apa pun. Bonus
+//    dipasang per SKILL lewat SkillBonus (HP Eff, DP Eff, Devastation), jadi pemain menentukan
+//    sendiri skill mana yang dapat bonus. Serangan biasa (Attack) selalu netral.
 //  - Sekutu yang break tidak memulihkan DP kecuali di-heal skill.
 //  - HP satu sekutu 0 = game over.
 //  - Buff/debuff: AtkUp dan DevUp sekali pakai. Hanya SKILL serangan yang memakai dan
@@ -40,19 +44,21 @@ constexpr int kStartSP            = 10;   // TUNING: cukup untuk skill biasa di 
 constexpr int kSpRegenFront       = 2;    // TUNING
 constexpr int kSpRegenBack        = 4;    // TUNING
 constexpr int kDevastationPerHit  = 4;    // TUNING: devastation rate per hit (hanya saat musuh break), karakter biasa
-constexpr int kBlasterDevMult     = 4;    // Blaster: 4x lebih cepat (serangan biasa dan skill biasa)
-constexpr int kBlasterSignatureDevMult = 5;   // Blaster: 5x lebih cepat (skill andalan)
+constexpr int kBlasterDevMult     = 4;    // dev_mult skill biasa Blaster: 4x lebih cepat
+constexpr int kBlasterSignatureDevMult = 5;   // dev_mult skill andalan (EX) Blaster: 5x lebih cepat
+constexpr int kHpEffPct           = 130;  // bonus HP Eff: damage ke HP jadi 130% (semua skill)
+constexpr int kDpEffPct           = 130;  // bonus DP Eff: damage ke DP jadi 130%
 constexpr int kMaxDevastation     = 300;
-constexpr int kMaxEffectStacks    = 2;    // tumpukan maksimum per jenis efek
-constexpr int kMaxDefUpPct        = 70;   // batas pengurangan damage dari DefUp
-constexpr int kMaxAtkDownPct      = 60;   // batas pengurangan damage dari AtkDown
+constexpr int kMaxEffectStacks    = 2;
+constexpr int kMaxDefUpPct        = 70;
+constexpr int kMaxAtkDownPct      = 60;
 constexpr int kEnemyFocusPower    = 30;   // TUNING: damage serangan fokus musuh (1 hit total), fase Awaken
 constexpr int kEnemyAoePower      = 15;   // TUNING: damage serangan massal musuh (per anggota), fase Awaken
 constexpr int kEnemyFocusPowerPhase1 = 18;   // TUNING: fase 1 (Hellspider) dibuat lebih santai
 constexpr int kEnemyAoePowerPhase1   = 8;    // TUNING: fase 1 (Hellspider) dibuat lebih santai
 constexpr int kMaxDevastationAwaken  = 999;  // TUNING: cap devastation rate lebih tinggi khusus fase Awaken
-constexpr int kStepDelay          = 50;   // frame antar aksi pemain
-constexpr int kEnemyDelay         = 60;   // frame sebelum musuh bergerak
+constexpr int kStepDelay          = 50;
+constexpr int kEnemyDelay         = 60;
 constexpr int kStunEndDelay       = 30;   // jeda antara visual stun hilang dan musuh menyerang
 
 // Gauge terisi dari tiap hit yang mengenai musuh (dp atau hp, tidak masalah). Setiap
@@ -63,7 +69,7 @@ constexpr int kStunEndDelay       = 30;   // jeda antara visual stun hilang dan 
 // (total giliran per stage: kOdTotalTurns, sudah termasuk giliran aktivasi) habis. Giliran ekstra TIDAK memicu
 // giliran musuh dan TIDAK meregen SP/menjalankan tickEffects (lihat startExtraRound()).
 constexpr int kOdHitsPerBar       = 15;   // TUNING
-constexpr int kOdMaxBars          = 3;    // jumlah stage OD
+constexpr int kOdMaxBars          = 3;
 constexpr std::array<int, kOdMaxBars> kOdMultPct = {{ 110, 120, 130 }};  // TUNING
 constexpr std::array<int, kOdMaxBars> kOdTotalTurns = {{ 1, 2, 3 }};  // TUNING: total giliran OD per stage (termasuk giliran aktivasi)
 constexpr std::array<int, kOdMaxBars> kOdSpGrant = {{ 6, 12, 20 }};  // TUNING
@@ -87,22 +93,28 @@ struct StatusEffect {
     bool       fresh;         // baru dipasang di ronde ini: belum dihitung oleh tickEffects
 };
 
+// Bonus yang dipasang ke sebuah skill serangan (bukan ke class). Angkanya ditentukan konstanta di
+// atas. HP Eff dan DP Eff sama untuk semua skill; hanya Devastation yang lebih besar di skill EX.
+enum class SkillBonus { None, HpEff, DpEff, Devastation };
+constexpr int kSkillBonusCount = 4;
+
 struct Skill {
     const char* name   = "";
     SkillKind   kind   = SkillKind::Attack;
     int sp_cost = 0;
-    int hits    = 1;      // jumlah hit (Attack)
+    int hits    = 1;
     int power   = 0;      // damage per hit (Attack) atau DP dipulihkan ke tiap front (HealDP)
     int dp_pct  = 100;    // pengali damage saat mengenai DP (Breaker tinggi)
     int hp_pct  = 100;    // pengali damage saat mengenai HP (Attacker tinggi)
     SkillEffect fx;       // buff/debuff tambahan (opsional untuk Attack, wajib untuk Support)
-    int dev_mult = 0;     // pengali devastation rate per hit; 0 = ikut pengali karakter
+    int dev_mult = 1;     // pengali devastation rate per hit (bonus Devastation > 1); 1 = normal
+    SkillBonus bonus = SkillBonus::None;   // sumber hp_pct/dp_pct/dev_mult di atas (lihat refreshBonus)
     bool is_basic = false;   // attack biasa: tidak memakai dan tidak menghabiskan ATK+/DEV+
     bool ex = false;      // EX Skill: mahal, tanpa batas pemakaian per battle
     int max_uses = 0;     // 0 = tanpa batas
     int stun_chance = 0;  // % peluang membuat musuh stun (lewat giliran berikutnya)
     int sp_gain = 0;      // SP yang dipulihkan ke pemakai jika berhasil
-    int sp_gain_chance = 0;   // % peluang memulihkan SP
+    int sp_gain_chance = 0;
     const char* description = "";
 
     Skill() = default;
@@ -115,7 +127,19 @@ struct Skill {
     }
     Skill& withDescription(const char* d) { description = d; return *this; }
     Skill& withDevMult(int m) { dev_mult = m; return *this; }
-    Skill& asEx() { ex = true; return *this; }
+    // Hitung ulang hp_pct/dp_pct/dev_mult dari 'bonus'. Hanya skill Attack yang dapat bonus.
+    void refreshBonus() {
+        hp_pct = 100; dp_pct = 100; dev_mult = 1;
+        if (kind != SkillKind::Attack) return;
+        switch (bonus) {
+        case SkillBonus::HpEff:       hp_pct = kHpEffPct; break;
+        case SkillBonus::DpEff:       dp_pct = kDpEffPct; break;
+        case SkillBonus::Devastation: dev_mult = ex ? kBlasterSignatureDevMult : kBlasterDevMult; break;
+        case SkillBonus::None:        break;
+        }
+    }
+    Skill& withBonus(SkillBonus b) { bonus = b; refreshBonus(); return *this; }
+    Skill& asEx() { ex = true; if (bonus != SkillBonus::None) refreshBonus(); return *this; }
     Skill& withUses(int uses) { max_uses = uses; return *this; }
     Skill& withStun(int chance) { stun_chance = chance; return *this; }
     Skill& withSpGain(int amount, int chance) { sp_gain = amount; sp_gain_chance = chance; return *this; }
@@ -130,14 +154,14 @@ inline Skill makeSupport(const char* name, int cost, EffectType t, int value, in
 }
 
 struct Combatant {
-    std::string name;
+    std::string name;            // nama tampilan (boleh diganti pemain lewat Custom Party)
+    std::string key;             // pengenal tetap (nama bawaan): untuk ikon dan gaya serangan, TIDAK ikut berubah
     const char* role = "";
     int  max_dp = 0, dp = 0;
     int  max_hp = 0, hp = 0;
     int  atk = 0;
     int  sp  = 0;
     std::array<Skill, 2> skills;
-    int  dev_mult = 1;           // pengali kenaikan devastation rate musuh per hit (Blaster > 1)
     std::array<int, 2> uses_left = {{ -1, -1 }};   // sisa pemakaian tiap skill; -1 = tanpa batas
 
     bool is_enemy     = false;
@@ -151,14 +175,13 @@ struct Combatant {
     Combatant() = default;
     Combatant(const char* n, const char* r, int dp_, int hp_, int atk_,
               const Skill& s0, const Skill& s1)
-        : name(n), role(r), max_dp(dp_), dp(dp_), max_hp(hp_), hp(hp_), atk(atk_), sp(kStartSP) {
+        : name(n), key(n), role(r), max_dp(dp_), dp(dp_), max_hp(hp_), hp(hp_), atk(atk_), sp(kStartSP) {
         skills[0] = s0;
         skills[1] = s1;
         for (int i = 0; i < 2; ++i)
             uses_left[i] = skills[i].max_uses > 0 ? skills[i].max_uses : -1;
     }
 
-    Combatant& withDevMult(int m) { dev_mult = m; return *this; }
     bool alive() const { return hp > 0; }
 };
 
@@ -166,6 +189,20 @@ struct Party {
     std::array<Combatant, 3> front;
     std::array<Combatant, 3> back;
 };
+
+// ---- Class (role) ----
+// Hanya label untuk tampilan (tag di HUD dan layar Customize). Tidak memengaruhi damage, SP,
+// atau apa pun di battle; bonus ada di Skill::bonus.
+constexpr int kRoleCount = 6;
+const char* roleName(int idx);            // nama baku (string statis, aman disimpan di Combatant::role)
+int         roleIndex(const char* name);  // tidak peka huruf besar-kecil; -1 kalau tidak dikenal
+bool        setRole(Combatant& c, const char* role);   // false (tanpa perubahan) kalau tidak dikenal
+
+// Label bawaan HBR untuk tampilan: "[HP Eff]", "[DP Eff]", "[High Devastation]", atau "".
+const char* skillTag(const Skill& s);
+
+// Roster bawaan game (Ruka, Yuki, Tama di depan; Karen, Megumi, Tsukasa di belakang).
+Party makeDefaultParty();
 
 
 struct HitResult {
@@ -218,7 +255,7 @@ void  healPartyDP(Party& p, int amount);
 void  recoverFromBreak(Combatant& c);
 
 
-void addEffect(Combatant& c, EffectType type, int value, int turns);  // maks 2 tumpukan/jenis
+void addEffect(Combatant& c, EffectType type, int value, int turns);
 int  effectTotal(const Combatant& c, EffectType type);                 // jumlah nilai aditif
 // Awal giliran musuh: kurangi durasi efek (yang baru dipasang di ronde ini dilewati sekali), yang
 // mencapai 0 hilang sebelum musuh bertindak. Durasi 1 = bertahan sampai awal giliran musuh
@@ -226,7 +263,7 @@ int  effectTotal(const Combatant& c, EffectType type);                 // jumlah
 // durasinya lewat fungsi ini, supaya gampang ditumpuk terus; hanya direset saat Awaken
 // (lihat updateAwakening()).
 void tickEffects(Combatant& c);
-void consumeOneTimeBuffs(Combatant& c);      // habiskan AtkUp/DevUp setelah skill serangan
+void consumeOneTimeBuffs(Combatant& c);
 constexpr unsigned effectBit(EffectType t) { return 1u << static_cast<int>(t); }
 // skipMask: jenis efek (effectBit) yang tidak dituliskan, mis. karena sudah tampil sebagai icon.
 std::string effectSummary(const Combatant& c, unsigned skipMask = 0);   // mis. "ATK+x2 DEF+(2t)"
@@ -243,26 +280,31 @@ struct Command {
 
 class Battle {
 public:
+    // Party kustom (lihat party_config.h). Dipakai oleh start() berikutnya sebagai ganti roster
+    // bawaan. Yang disimpan adalah salinan, jadi tiap battle selalu mulai dari kondisi awal.
+    void setPartyOverride(const Party& p) { partyOverride_ = p; hasPartyOverride_ = true; }
+    void clearPartyOverride() { hasPartyOverride_ = false; }
+
     void start();
-    void update();                       // panggil tiap frame
+    void update();
 
     bool canUseSkill(int slot, int skillIdx) const;
     bool setCommand(int slot, CommandType type, int skillIdx = 0);
     void swapSlot(int slot, int backIdx);   // gratis, tanpa batas
-    void swapFront(int a, int b);           // tukar urutan dua slot front (urutan eksekusi)
-    void swapBack(int a, int b);            // tukar urutan dua anggota back
+    void swapFront(int a, int b);
+    void swapBack(int a, int b);
     void execute();
 
     int  odGauge()        const { return odGauge_; }         // total hit terkumpul (lihat kOdHitsPerBar)
-    int  odBarsReady()    const { return odBarsReady_; }      // 0..kOdMaxBars, siap dipakai
+    int  odBarsReady()    const { return odBarsReady_; }
     bool odActive()        const { return odActive_; }
-    int  odTurnsLeft()     const { return odExtraTurns_; }   // sisa giliran ekstra OD yang belum terpakai
+    int  odTurnsLeft()     const { return odExtraTurns_; }
     // Counter tampilan "sisa/total": total = giliran saat OD diaktifkan + giliran ekstra
     // kOdTotalTurns[stage - 1], sisa = giliran yang masih berada di bawah OD, termasuk
     // giliran yang sedang berjalan. Keduanya 0 selama OD tidak aktif.
     int  odTurnsRemaining() const { return odActive_ ? odExtraTurns_ + 1 : 0; }
     int  odTurnsTotal()     const { return odActive_ ? odTotalTurns_ : 0; }
-    int  odLevel()          const { return odActive_ ? odLevel_ : 0; }   // 1..kOdMaxBars
+    int  odLevel()          const { return odActive_ ? odLevel_ : 0; }
     // Aktifkan OD memakai seluruh bar yang sudah terkumpul. false kalau belum Planning, belum
     // ada bar penuh, atau OD sedang aktif (tidak bisa OD berantai). Gauge/bar TIDAK berubah
     // saat gagal.
@@ -314,6 +356,9 @@ private:
     void recordHits(const AttackSummary& a, bool onEnemy, int slot, int baseDelay,
                      int attackerSlot = -1);
 
+    Party       partyOverride_;
+    bool        hasPartyOverride_ = false;
+
     Party       party_;
     Combatant   enemy_;
     BattlePhase phase_ = BattlePhase::Planning;
@@ -334,6 +379,6 @@ private:
     bool odActive_        = false;
     int  odExtraTurns_   = 0;
     int  odTotalTurns_   = 0;     // total giliran di bawah OD sejak diaktifkan (untuk counter "sisa/total")
-    int  odLevel_        = 0;     // stage OD yang sedang berjalan (1..kOdMaxBars)
+    int  odLevel_        = 0;
     int  odMultPct_       = 100;
 };

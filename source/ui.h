@@ -34,18 +34,18 @@ const u32 cyanLight = C2D_Color32(178, 236, 255, 255);
 const u32 disc      = C2D_Color32( 18,  10,  30, 255);   // dasar gelap di dalam cincin potret
 const u32 danger    = pink;
 const u32 purple    = C2D_Color32(124,  59, 230, 255);
-const u32 white     = C2D_Color32(242, 247, 250, 255);   // teks utama
-const u32 grey      = C2D_Color32(139, 169, 184, 255);   // teks sekunder
+const u32 white     = C2D_Color32(242, 247, 250, 255);
+const u32 grey      = C2D_Color32(139, 169, 184, 255);
 const u32 black     = C2D_Color32(  0,   0,   0, 255);
-const u32 btn       = pink;                              // warna aksen tombol bawaan
-const u32 glass     = C2D_Color32(  7,  19,  33, 195);   // panel kaca gelap (transparan)
-const u32 line      = C2D_Color32( 76, 189, 232, 150);   // garis tepi tipis
-const u32 tileBg    = C2D_Color32( 12,  34,  50, 255);   // dasar kotak ikon dan baris
+const u32 btn       = pink;
+const u32 glass     = C2D_Color32(  7,  19,  33, 195);
+const u32 line      = C2D_Color32( 76, 189, 232, 150);
+const u32 tileBg    = C2D_Color32( 12,  34,  50, 255);
 const u32 barBg     = C2D_Color32( 14,  28,  42, 255);
-const u32 dp        = cyan;                              // DP: cyan (party dan bos)
-const u32 hp        = pink;                              // HP: merah muda (party dan bos)
+const u32 dp        = cyan;
+const u32 hp        = pink;
 const u32 broken    = C2D_Color32(255, 150,  40, 255);
-const u32 ally      = C2D_Color32( 70, 120, 220, 255);   // kotak cadangan ikon
+const u32 ally      = C2D_Color32( 70, 120, 220, 255);
 }  // namespace colors
 
 
@@ -125,6 +125,7 @@ public:
     // (mis. kartu slot dengan ikon) dan memakai pressed() untuk efek tekan.
     void draw(TextRenderer& text) const;
     bool pressed(int id) const { return id == pressedId_ && inside_; }
+    void useBattleStyle(bool on) { battleStyle_ = on; }
 
 private:
     int  hitId(int px, int py) const;
@@ -133,6 +134,7 @@ private:
     std::vector<Button> buttons_;
     int  pressedId_ = kNone;
     bool inside_    = false;
+    bool battleStyle_ = false;
 };
 
 

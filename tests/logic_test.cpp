@@ -47,10 +47,10 @@ static void testHitRules() {
     e.is_enemy = true;
     strike(hit(1, 10), e);
     assert(e.broken && e.stunned && e.devastation == 100);
-    strike(hit(1, 100), e);                              // hit 2: musuh sudah break
+    strike(hit(1, 100), e);
     assert(e.devastation == 100 + kDevastationPerHit);
     const int before = e.hp;
-    strike(hit(1, 100), e);                              // hit 3: dikalikan rate 102%
+    strike(hit(1, 100), e);
     assert(before - e.hp == 100 * (100 + kDevastationPerHit) / 100);
 
     // Sekutu break tidak pulih sendiri, tapi heal DP memulihkan.
@@ -65,7 +65,7 @@ static void testHitRules() {
     assert(p.back[0].broken && p.back[0].dp == 0);
     healPartyDP(p, 15);
     assert(!p.front[0].broken && p.front[0].dp == 15);
-    assert(!p.back[0].broken && p.back[0].dp == 15);   // Resupply juga menyembuhkan back row
+    assert(!p.back[0].broken && p.back[0].dp == 15);
 }
 
 static void testEffects() {
@@ -122,7 +122,7 @@ static void testEffects() {
     addEffect(d, EffectType::AtkUp, 40, 0);
     tickEffects(d);                                   // ronde pemasangan tidak dihitung
     assert(effectTotal(d, EffectType::DefUp) == 30);
-    tickEffects(d);                                   // sisa 1
+    tickEffects(d);
     assert(effectTotal(d, EffectType::DefUp) == 30);
     tickEffects(d);
     assert(effectTotal(d, EffectType::DefUp) == 0);
@@ -169,7 +169,7 @@ static void testPlanning() {
            b.party().front[2].name == "Tama");
 
     // Skill dukungan (Tama, slot 2) harus jalan lebih dulu dari serangan.
-    assert(b.setCommand(2, CommandType::Skill, 0));       // Resupply (heal = grup dukungan)
+    assert(b.setCommand(2, CommandType::Skill, 0));
     b.execute();
     assert(b.queue().size() == 3 && b.queue()[0] == 2 && b.queue()[1] == 0 && b.queue()[2] == 1);
 
@@ -181,7 +181,7 @@ static void testPlanning() {
     c.start();
     c.swapSlot(0, 0);
     assert(c.party().front[0].name == "Karen" && c.party().back[0].name == "Ruka");
-    c.swapSlot(0, 0);                          // bisa berkali-kali
+    c.swapSlot(0, 0);
     assert(c.party().front[0].name == "Ruka");
 }
 
@@ -198,7 +198,7 @@ static void testSwapWithinRows() {
     b.start();
 
     // Tukar urutan front: karakter dan aksinya berpindah bersama.
-    assert(b.setCommand(0, CommandType::Skill, 1));          // Ruka: Cross Cut
+    assert(b.setCommand(0, CommandType::Skill, 1));
     b.swapFront(0, 2);
     assert(b.party().front[0].name == "Tama" && b.party().front[2].name == "Ruka");
     assert(b.command(2).type == CommandType::Skill && b.command(0).type == CommandType::Attack);
@@ -269,9 +269,9 @@ static void testBuffFlow() {
         runUntil(c, BattlePhase::EnemyTurn);
         assert(effectTotal(c.enemy(), EffectType::DefDown) == 30);
         if (!runToPlanning(c)) continue;                             // giliran musuh ronde 1: belum dihitung
-        assert(effectTotal(c.enemy(), EffectType::DefDown) == 30);   // masih ada di ronde 2
+        assert(effectTotal(c.enemy(), EffectType::DefDown) == 30);
         c.execute();
-        if (!runToPlanning(c)) continue;                             // awal giliran musuh ronde 2
+        if (!runToPlanning(c)) continue;
         assert(effectTotal(c.enemy(), EffectType::DefDown) == 30);   // tetap ada: debuff musuh tidak meluruh
         checked = true;
     }
@@ -360,50 +360,110 @@ static void testBlasterDevastation() {
         e.broken = true;
         return e;
     };
-    Combatant normal = dummy(0, 1);
-    Combatant blaster = dummy(0, 1);
-    blaster.dev_mult = kBlasterDevMult;
+    // Pengali devastation rate hanya datang dari skill, bukan dari karakter/role.
+    Combatant user = dummy(0, 1);
 
-    // Karakter biasa: +2 per hit. Blaster: x4. Skill andalan Blaster: x5.
+    // Skill biasa: +4 per hit. Skill Blaster: x4. Skill andalan Blaster: x5.
     Combatant e1 = brokenEnemy();
-    performAttack(hit(1, 1), normal, e1);
+    performAttack(hit(1, 1), user, e1);
     assert(e1.devastation == 100 + kDevastationPerHit);
     Combatant e2 = brokenEnemy();
-    performAttack(hit(1, 1), blaster, e2);
+    Skill blasterSkill = hit(1, 1);
+    blasterSkill.dev_mult = kBlasterDevMult;
+    performAttack(blasterSkill, user, e2);
     assert(e2.devastation == 100 + kDevastationPerHit * kBlasterDevMult);
     Combatant e3 = brokenEnemy();
     Skill sig = hit(3, 1);
     sig.dev_mult = kBlasterSignatureDevMult;
-    performAttack(sig, blaster, e3);
+    performAttack(sig, user, e3);
     assert(e3.devastation == 100 + 3 * kDevastationPerHit * kBlasterSignatureDevMult);
 
     // Musuh yang belum break: Blaster pun tidak menaikkan devastation rate.
     Combatant intact = dummy(1000, 1000);
     intact.is_enemy = true;
-    performAttack(sig, blaster, intact);
+    performAttack(sig, user, intact);
     assert(intact.devastation == 100);
 
-    // Roster nyata, musuh sedang break: Karen (Blaster) jauh lebih cepat dari Tama (Healer).
+    // Roster nyata, musuh sedang break: skill Karen (Blaster) jauh lebih cepat dari attack biasa.
     auto runRound = [](bool withKaren) {
         Battle b;
         b.start();
-        assert(b.party().back[0].name == "Karen" && b.party().back[0].dev_mult == kBlasterDevMult);
+        assert(b.party().back[0].name == "Karen");
         assert(b.party().back[0].skills[0].dev_mult == kBlasterSignatureDevMult);
+        assert(b.party().back[0].skills[1].dev_mult == kBlasterDevMult);
         b.enemy_.dp = 0;
         b.enemy_.broken = true;
-        if (withKaren) b.swapSlot(2, 0);            // Karen menggantikan Tama
+        if (withKaren) {
+            b.swapSlot(2, 0);
+            b.setCommand(2, CommandType::Skill, 1);  // Wild Fling: 3 hit, tiap hit x4
+        }
         b.execute();
         runUntil(b, BattlePhase::EnemyTurn);
         return b.enemy().devastation;
     };
-    const int without = runRound(false);   // Ruka + Yuki + Tama, semua Attack biasa
-    const int with = runRound(true);       // Ruka + Yuki + Karen
+    const int without = runRound(false);
+    const int with = runRound(true);
     assert(without == 100 + 3 * kDevastationPerHit);
-    assert(with == 100 + 2 * kDevastationPerHit + kDevastationPerHit * kBlasterDevMult);
+    assert(with == 100 + 2 * kDevastationPerHit + 3 * kDevastationPerHit * kBlasterDevMult);
     assert(with > without);
+
+    // Attack biasa Karen TIDAK dapat bonus role: sama seperti karakter lain.
+    Battle b;
+    b.start();
+    b.enemy_.dp = 0;
+    b.enemy_.broken = true;
+    b.swapSlot(2, 0);
+    b.execute();
+    runUntil(b, BattlePhase::EnemyTurn);
+    assert(b.enemy().devastation == 100 + 3 * kDevastationPerHit);
 }
 
-// Aturan overflow: satu hit yang menghabiskan DP tidak melukai HP; hit berikutnya melukai HP.
+// Role hanya label. Bonus ada di Skill::bonus: cek nilai bawaan roster dan bahwa Attack biasa netral.
+static void testDefaultSkillBonuses() {
+    const Party p = makeDefaultParty();
+    const Combatant& ruka = p.front[0];
+    const Combatant& yuki = p.front[1];
+    const Combatant& karen = p.back[0];
+    for (int j = 0; j < 2; ++j) {
+        assert(ruka.skills[j].bonus == SkillBonus::HpEff && ruka.skills[j].hp_pct == kHpEffPct);
+        assert(ruka.skills[j].dp_pct == 100 && ruka.skills[j].dev_mult == 1);
+        assert(yuki.skills[j].bonus == SkillBonus::DpEff && yuki.skills[j].hp_pct == 100);
+    }
+    assert(yuki.skills[0].dp_pct == kDpEffPct && yuki.skills[1].dp_pct == kDpEffPct); 
+    assert(kDpEffPct == 130);
+    assert(karen.skills[0].dev_mult == kBlasterSignatureDevMult && karen.skills[1].dev_mult == kBlasterDevMult);
+    assert(karen.skills[0].hp_pct == 100 && karen.skills[0].dp_pct == 100);
+
+    // Karakter lain: tanpa bonus sama sekali.
+    for (const Combatant* c : { &p.front[2], &p.back[1], &p.back[2] })
+        for (const Skill& s : c->skills)
+            assert(s.bonus == SkillBonus::None && s.hp_pct == 100 && s.dp_pct == 100 && s.dev_mult == 1);
+
+    // Attack biasa selalu netral, siapa pun pemakainya.
+    for (const Combatant* c : { &ruka, &yuki, &karen }) {
+        const Skill basic = normalAttackOf(*c);
+        assert(basic.bonus == SkillBonus::None && basic.hp_pct == 100 && basic.dp_pct == 100 && basic.dev_mult == 1);
+    }
+
+    // Mengganti label role tidak mengubah apa pun pada skill.
+    Combatant k = karen;
+    assert(setRole(k, "healer") && std::string(k.role) == "Healer");
+    assert(k.skills[0].dev_mult == kBlasterSignatureDevMult && k.skills[1].dev_mult == kBlasterDevMult);
+    assert(!setRole(k, "Tank") && std::string(k.role) == "Healer");
+
+    // Bonus hanya berlaku untuk skill Attack; Heal/Support tetap netral walau diberi bonus.
+    Skill heal("H", SkillKind::HealDP, 1, 0, 5);
+    heal.withBonus(SkillBonus::HpEff);
+    assert(heal.hp_pct == 100);
+    Skill atk("A", SkillKind::Attack, 1, 1, 5);
+    atk.withBonus(SkillBonus::DpEff);
+    assert(atk.dp_pct == kDpEffPct);
+    atk.asEx();
+    assert(atk.dp_pct == kDpEffPct);
+    atk.withBonus(SkillBonus::Devastation);
+    assert(atk.dp_pct == 100 && atk.dev_mult == kBlasterSignatureDevMult);
+}
+
 static void testOverflowRule() {
     // 50 damage dalam 1 hit ke DP 30: DP habis, 20 sisanya dibuang, HP utuh.
     Combatant a = dummy(30, 100);
@@ -478,14 +538,14 @@ static void testFxEvents() {
     b.start();
     b.party_.front[0].dp = 0;  b.party_.front[0].broken = true;
     b.party_.front[1].dp = 10;
-    b.setCommand(2, CommandType::Skill, 0);              // Tama: Resupply (+20 DP tim)
+    b.setCommand(2, CommandType::Skill, 0);
     b.execute();
     std::vector<FxEvent> ev;
     for (int i = 0; i < 400 && ev.empty(); ++i) { b.update(); ev = b.takeFx(); }
     assert(ev.size() == 2);
     assert(ev[0].kind == FxKind::Heal && ev[0].slot == 0 && ev[0].dp == 20);
     assert(ev[1].kind == FxKind::Heal && ev[1].slot == 1 && ev[1].dp == 10);
-    assert(b.takeFx().empty());                          // sudah dikosongkan
+    assert(b.takeFx().empty());
 }
 
 static void testStunEvents() {
@@ -623,9 +683,9 @@ static void testStunStacking() {
     performAttack(hit(1, 1).withStun(100), b.party_.front[0], b.enemy_);
     performAttack(hit(1, 1).withStun(100), b.party_.front[1], b.enemy_);
     assert(b.enemy_.stun_skips == 2);
-    playRound(b);                                            // giliran musuh 1: skip
+    playRound(b);
     assert(b.round() == 2 && b.enemy_.stunned && partyTotal(b) == start);
-    playRound(b);                                            // giliran musuh 2: skip
+    playRound(b);
     assert(b.round() == 3 && b.enemy_.stunned && partyTotal(b) == start);
     playRound(b);                                            // giliran musuh 3: stun hilang, menyerang
     assert(b.round() == 4 && !b.enemy_.stunned && partyTotal(b) < start);
@@ -646,7 +706,7 @@ static void testOverdrive() {
     Battle b;
     b.start();
     makeSturdy(b);
-    assert(!b.activateOverdrive());              // belum ada bar
+    assert(!b.activateOverdrive());
     b.odBarsReady_ = 1;
     b.execute();
     assert(!b.activateOverdrive());               // sedang Executing, bukan Planning
@@ -659,7 +719,7 @@ static void testOverdrive() {
     const int spBefore = b.party_.front[0].sp;
     assert(b.activateOverdrive());
     assert(b.odActive() && b.odBarsReady() == 0 && b.odGauge() == 0);
-    assert(b.party_.front[0].sp == std::min(kMaxSPOverdrive, spBefore + kOdSpGrant[1]));   // 2 bar -> level 2
+    assert(b.party_.front[0].sp == std::min(kMaxSPOverdrive, spBefore + kOdSpGrant[1]));
 
     // Giliran ekstra: stage 2 = kOdTotalTurns[1] (2) giliran, jadi 1 giliran ekstra TANPA giliran
     // musuh, baru sesudahnya normal lagi. odTurnsLeft() berkurang 1 tiap giliran ekstra terpakai.
@@ -696,8 +756,8 @@ static void testOverdrive() {
     Battle e;
     e.start();
     makeSturdy(e);
-    e.party_.front[0].sp = kMaxSP;                 // sudah penuh dari regen biasa
-    e.odBarsReady_ = 3;                            // level 3: +20 SP
+    e.party_.front[0].sp = kMaxSP;
+    e.odBarsReady_ = 3;
     e.odGauge_ = kOdHitsPerBar * 3;
     assert(e.activateOverdrive());
     assert(e.party_.front[0].sp == kMaxSPOverdrive);   // 20 + 20 dibatasi 40, bukan dibatasi 20
@@ -738,7 +798,7 @@ static void testOverdriveCounterAndNoChain() {
         assert(b.odActive() && b.odTurnsRemaining() == left && b.odTurnsTotal() == 3);
         assert(!b.activateOverdrive());
     }
-    playRound(b);                                  // giliran terakhir selesai: OD mati
+    playRound(b);
     assert(!b.odActive());
     assert(b.odTurnsRemaining() == 0 && b.odTurnsTotal() == 0 && b.odLevel() == 0);
 
@@ -844,10 +904,10 @@ static void testAtkUpOnlyBySkill() {
     Battle b;
     b.start();
     makeSturdy(b);
-    addEffect(b.party_.front[0], EffectType::AtkUp, 40, 0);       // Ruka
-    playRound(b);                                                  // semua attack biasa
+    addEffect(b.party_.front[0], EffectType::AtkUp, 40, 0);
+    playRound(b);
     assert(effectTotal(b.party_.front[0], EffectType::AtkUp) == 40);
-    assert(b.setCommand(0, CommandType::Skill, 1));                // Cross Cut
+    assert(b.setCommand(0, CommandType::Skill, 1));
     playRound(b);
     assert(effectTotal(b.party_.front[0], EffectType::AtkUp) == 0);
 }
@@ -867,8 +927,8 @@ static void testDialogue() {
     all.load(makePrologueScript());
     size_t lines = 0;
     while (!all.finished()) {
-        all.advance();          // tampilkan semua
-        all.advance();          // baris berikutnya
+        all.advance();
+        all.advance();
         ++lines;
     }
     assert(lines == 5);
@@ -880,11 +940,11 @@ static void testDialogue() {
     DialogueScene h;
     h.load(makePrologueScript());
     assert(h.historyCount() == 1 && h.logText(0).empty());
-    h.advance();                                        // tampilkan seluruh baris 1
+    h.advance();
     assert(h.logText(0) == "Visual telah dikonfirmasi. Hellspider kini terlihat di tengah kota.");
-    h.advance();                                        // baris 2 mulai
+    h.advance();
     assert(h.historyCount() == 2 && h.logText(0) == "Visual telah dikonfirmasi. Hellspider kini terlihat di tengah kota." && h.logText(1).empty());
-    for (int i = 0; i < 10; ++i) h.update();            // mesin ketik jalan sebagian
+    for (int i = 0; i < 10; ++i) h.update();
     assert(!h.logText(1).empty() && h.logText(1) == h.visibleText());
     assert(h.logText(99).empty());
     assert(h.lineAt(1).speaker == "Nanami Nanase");
@@ -953,7 +1013,7 @@ static void plan(Battle& b, Policy pol) {
                 sc = s.hits * s.power * (broken ? s.hp_pct : s.dp_pct) / 100;
                 // Saat musuh sedang break, kenaikan devastation rate ikut dihargai
                 // (sekitar 1 poin damage tim per 1% rate).
-                if (broken) sc += s.hits * (s.dev_mult > 0 ? s.dev_mult : n.dev_mult) * kDevastationPerHit;
+                if (broken) sc += s.hits * std::max(1, s.dev_mult) * kDevastationPerHit;
                 if (useFx) sc += fxScore(b, s.fx) / 2;
             }
             if (sc > score) { score = sc; pick = i; }
@@ -1011,8 +1071,7 @@ static void simulate(Policy pol, const char* label) {
             }
         }
         const Combatant& boss = b.enemy();
-        // Fase 1 (sebelum tuning "santai") punya max_dp+max_hp = 90+800 = 890; sekarang 55+500 = 555.
-        // Nilai ini dijumlahkan balik karena boss fase 1 sudah pasti dikalahkan penuh sebelum awaken.
+        // Total DP+HP boss fase 1 (55 + 500) dijumlahkan balik: sudah pasti dikalahkan penuh sebelum awaken.
         assert(enemyLostByFx == (boss.max_dp - boss.dp) + (boss.max_hp - boss.hp)
                + (b.awakened() ? 555 : 0));
         totalBreaks += enemyBreaks;
@@ -1020,8 +1079,8 @@ static void simulate(Policy pol, const char* label) {
         rounds += b.round();
         (b.phase() == BattlePhase::Victory ? wins : losses)++;
     }
-    assert(totalBreaks > 0);                              // event Break memang muncul di simulasi
-    assert(totalStuns > 0);                               // event Stun dari skill andalan muncul di simulasi
+    assert(totalBreaks > 0);
+    assert(totalStuns > 0);
     std::printf("%-10s menang %3d / kalah %3d  (rata-rata %.1f ronde, %ld break musuh)\n", label, wins,
                 losses, static_cast<double>(rounds) / N, totalBreaks);
 }
@@ -1157,6 +1216,7 @@ int main() {
     testSwapWithinRows();
     testBuffFlow();
     testBlasterDevastation();
+    testDefaultSkillBonuses();
     testOverflowRule();
     testNoAutoRecovery();
     testSkillList();
