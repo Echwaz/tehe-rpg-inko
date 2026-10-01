@@ -6,3 +6,5 @@
 *.map
 
 build/
+meta/banner.bnr
+meta/icon.icn
