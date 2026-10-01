@@ -27,6 +27,16 @@ You also can change icon character image with your own image
 2. Copy to Your 3DS SD Card:/3ds/tehe-rpg-inko/assets/
 3. Name it to **first name**_icon.png (example ruka_icon.png, yuki_icon.png)
 
+## Custom-Party
+
+Press SELECT in dialogue scene to enter the Custom-Party screen
+
+or
+
+You can edit with text editor in party.log in 3ds/Tehe-RPG-inko/
+
+Now you can change almost anything to put your fav squad member / original character to the game
+
 ## Controls
 
 Touchscreen is working for any button
@@ -40,6 +50,8 @@ B = Hide text box
 X = Skip
 
 Y = Open Log
+
+SELECT = Custom Party
 
 **Battle Scene**
 
