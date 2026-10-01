@@ -73,7 +73,7 @@ static void testTextSanitizing() {
     assert(sanitizeText("", 10, "def") == "def");
     assert(sanitizeText("   \t ", 10, "def") == "def");
     assert(sanitizeText("  Ruka  ", 10, "def") == "Ruka");
-    assert(sanitizeText("Ru\nka\x01", 10, "def") == "Ruka");                 // karakter kontrol dibuang
+    assert(sanitizeText("Ru\nka\x01", 10, "def") == "Ruka");
     assert(validUtf8(sanitizeText(std::string("A\xE3\x83", 3) + "B", 10, "d")));   // urutan UTF-8 terpotong dibuang
     assert(sanitizeText("\xFF\xFE", 10, "def") == "def");
     assert(sanitizeText("Ruka Kayamori Extra", 10, "def") == "Ruka Kayam");
@@ -84,7 +84,7 @@ static void testClampAndRules() {
     PartyConfig c = defaults();
 
     // Nilai gila dijepit.
-    SkillCfg& atk = c.chars[kRuka].skills[0];         // Attack
+    SkillCfg& atk = c.chars[kRuka].skills[0];
     atk.sp_cost = 999; atk.hits = -5; atk.power = 9999;
     atk.fx_type = EffectType::DefDown; atk.fx_value = 9999; atk.fx_turns = 50; atk.fx_scope = EffectScope::Self;
     // Skill dukungan tanpa efek harus kembali ke efek bawaan.
@@ -116,14 +116,14 @@ static void testClampAndRules() {
 
     PartyConfig again = c;
     sanitize(again);
-    assert(again.chars[kRuka] == c.chars[kRuka]);       // idempoten
+    assert(again.chars[kRuka] == c.chars[kRuka]);
 }
 
 static void testStepField() {
     PartyConfig c = defaults();
 
     // Attack tanpa efek: efek bisa ditambah, lalu kolom terkait muncul.
-    SkillCfg& s = c.chars[kRuka].skills[1];             // Cross Cut, tanpa efek
+    SkillCfg& s = c.chars[kRuka].skills[1];
     assert(s.fx_type == EffectType::None);
     assert(fieldVisible(s, SkillField::Hits) && fieldVisible(s, SkillField::FxType));
     assert(!fieldVisible(s, SkillField::FxValue) && !fieldVisible(s, SkillField::FxScope));
@@ -134,7 +134,7 @@ static void testStepField() {
     stepField(s, SkillField::FxValue, +1);
     assert(s.fx_value == 35 && fieldText(s, SkillField::FxValue) == "35%");
     for (int i = 0; i < 50; ++i) stepField(s, SkillField::FxValue, +1);
-    assert(s.fx_value == 80);                            // berhenti di batas
+    assert(s.fx_value == 80);
     stepField(s, SkillField::FxScope, +1);
     assert(s.fx_scope == EffectScope::Self || s.fx_scope == EffectScope::AllFront ||
            s.fx_scope == EffectScope::AllParty);
@@ -169,7 +169,7 @@ static void testStepField() {
     stepField(heal, SkillField::FxType, +1);            // tidak berbuat apa-apa
     assert(heal.fx_type == EffectType::None);
 
-    sanitize(c);                                          // hasil edit lewat stepField selalu sah
+    sanitize(c);
     assert(c.chars[kRuka].skills[1].sp_cost == kSpCostMax);
 }
 
@@ -178,7 +178,7 @@ static void testSaveLoad() {
 
     PartyConfig missing;
     assert(!load("/tmp/party_config_test_dir/tidak_ada.cfg", missing));
-    assert(missing.chars[0] == defaults().chars[0]);      // berkas tidak ada = bawaan
+    assert(missing.chars[0] == defaults().chars[0]);
 
     PartyConfig c = defaults();
     c.chars[kRuka].name = "ルカ";
@@ -190,7 +190,7 @@ static void testSaveLoad() {
     c.chars[kRuka].skills[1].fx_value = 25;
     c.chars[kRuka].skills[1].fx_turns = 2;
     c.chars[kRuka].skills[1].fx_scope = EffectScope::Enemy;
-    c.chars[kTama].skills[0].power = 33;                // heal
+    c.chars[kTama].skills[0].power = 33;
     c.chars[kTsukasa].skills[0].fx_type = EffectType::DefUp;
     c.chars[kTsukasa].skills[0].fx_value = 45;
     c.chars[kTsukasa].skills[0].fx_turns = 3;
@@ -223,7 +223,7 @@ static void testSaveLoad() {
          "tanpa_sama_dengan\r\n");
     PartyConfig h;
     assert(load(path, h));
-    assert(h.chars[kRuka].name == "Ruka Sen");                          // dipotong 8 karakter
+    assert(h.chars[kRuka].name == "Ruka Sen");
     assert(h.chars[kRuka].skills[0].sp_cost == defaults().chars[kRuka].skills[0].sp_cost);
     assert(h.chars[kRuka].skills[0].hits == kHitsMax && h.chars[kRuka].skills[0].power == 7);
     assert(h.chars[kRuka].skills[1].fx_type == EffectType::DefUp && h.chars[kRuka].skills[1].fx_value == 70 &&
@@ -273,7 +273,7 @@ static void testBuildPartyAndBattle() {
     b.setPartyOverride(p);
     b.start();
     assert(b.party().front[0].name == "Ruka-san");
-    assert(b.canUseSkill(0, 1));                         // biaya SP 0
+    assert(b.canUseSkill(0, 1));
     const int dp0 = b.enemy().dp;
     assert(b.setCommand(0, CommandType::Skill, 1));
     b.execute();
@@ -283,7 +283,7 @@ static void testBuildPartyAndBattle() {
         if (b.message().find("Ruka-san uses Tebasan Ganda") != std::string::npos) sawName = true;
     }
     assert(sawName);
-    assert(b.enemy().dp < dp0 || b.enemy().hp < 500);   // damage benar-benar masuk
+    assert(b.enemy().dp < dp0 || b.enemy().hp < 500);
 
     // start() ulang selalu mulai dari kondisi awal (party override tidak ikut termutasi).
     b.start();
@@ -368,7 +368,7 @@ static void testRoleIsOnlyALabel() {
                 assert(a.hp_pct == b.hp_pct && a.dp_pct == b.dp_pct && a.dev_mult == b.dev_mult && a.bonus == b.bonus);
             }
             const Combatant& m = i < 3 ? p.front[i] : p.back[i - 3];
-            assert(std::string(m.role) == roleName(r));                 // label ikut berubah
+            assert(std::string(m.role) == roleName(r));
         }
     }
 }
@@ -382,7 +382,7 @@ static void testSkillBonusPerSkill() {
     c.chars[kTama].skills[1].bonus = SkillBonus::HpEff;        // Saltire Slash: HP +30%
     c.chars[kYuki].skills[0].bonus = SkillBonus::Devastation;  // Meteor Shower (EX): dev x5
     c.chars[kYuki].skills[1].bonus = SkillBonus::None;
-    c.chars[kMegumi].skills[0].bonus = SkillBonus::DpEff;      // Excelsior Impact (EX): DP +50%
+    c.chars[kMegumi].skills[0].bonus = SkillBonus::DpEff;      // Excelsior Impact (EX): DP +30%
     const Party p = buildParty(c);
 
     const Skill& r0 = builtSkill(p, kRuka, 0);
@@ -395,24 +395,24 @@ static void testSkillBonusPerSkill() {
     assert(builtSkill(p, kYuki, 0).dev_mult == kBlasterSignatureDevMult && builtSkill(p, kYuki, 0).dp_pct == 100);
     const Skill& y1 = builtSkill(p, kYuki, 1);
     assert(y1.dp_pct == 100 && y1.hp_pct == 100 && y1.dev_mult == 1);
-    assert(builtSkill(p, kMegumi, 0).dp_pct == kDpEffExPct);
+    assert(builtSkill(p, kMegumi, 0).dp_pct == kDpEffPct);
 
     // Bonus nyata di battle: Cross Cut milik Ruka kini menaikkan devastation, Attack biasanya tidak.
     Combatant e("E", "Boss", 0, 1000, 0, Skill(), Skill());
     e.is_enemy = true; e.dp = 0; e.broken = true;
-    performAttack(r1, p.front[kRuka], e);                                     // 2 hit, tiap hit x4
+    performAttack(r1, p.front[kRuka], e);
     assert(e.devastation == 100 + 2 * kDevastationPerHit * kBlasterDevMult);
     Combatant e2 = e; e2.devastation = 100;
-    performAttack(normalAttackOf(p.front[kRuka]), p.front[kRuka], e2);        // Attack biasa: netral
+    performAttack(normalAttackOf(p.front[kRuka]), p.front[kRuka], e2);
     assert(e2.devastation == 100 + kDevastationPerHit);
 
     // Skill Heal dan Support tidak bisa menerima bonus: sanitize membuangnya.
-    c.chars[kTama].skills[0].bonus = SkillBonus::HpEff;        // Resupply (Heal)
-    c.chars[kTsukasa].skills[0].bonus = SkillBonus::DpEff;     // Full Enhance (Support)
-    c.chars[kRuka].skills[0].bonus = static_cast<SkillBonus>(99);   // nilai ngawur
+    c.chars[kTama].skills[0].bonus = SkillBonus::HpEff;
+    c.chars[kTsukasa].skills[0].bonus = SkillBonus::DpEff;
+    c.chars[kRuka].skills[0].bonus = static_cast<SkillBonus>(99);
     sanitize(c);
     assert(c.chars[kTama].skills[0].bonus == SkillBonus::None && c.chars[kTsukasa].skills[0].bonus == SkillBonus::None);
-    assert(c.chars[kRuka].skills[0].bonus == SkillBonus::Devastation);   // dijepit ke nilai tertinggi yang sah
+    assert(c.chars[kRuka].skills[0].bonus == SkillBonus::Devastation);
     const Party q = buildParty(c);
     assert(builtSkill(q, kTama, 0).hp_pct == 100 && builtSkill(q, kTsukasa, 0).dp_pct == 100);
 
@@ -442,9 +442,9 @@ static void testBonusField() {
     stepField(s, SkillField::Bonus, -1);
     assert(s.bonus == SkillBonus::None);
 
-    // Skill EX: angka bonusnya lebih besar.
+    // Skill EX: DP Eff sama dengan skill biasa (+30%); hanya Devastation yang lebih besar (x5).
     SkillCfg& ex = c.chars[kYuki].skills[0];
-    assert(ex.ex && fieldText(ex, SkillField::Bonus) == "DP +50%" && bonusText(ex) == "DP +50%");
+    assert(ex.ex && fieldText(ex, SkillField::Bonus) == "DP +30%" && bonusText(ex) == "DP +30%");
     ex.bonus = SkillBonus::Devastation;
     assert(bonusText(ex) == "DEV x5");
 
@@ -490,7 +490,7 @@ static void testRoleSaveLoad() {
 static void testBonusSaveLoad() {
     const std::string path = "/tmp/party_config_test_dir/bonus.cfg";
     PartyConfig c = defaults();
-    c.chars[kRuka].role = "Blaster";                           // label
+    c.chars[kRuka].role = "Blaster";
     c.chars[kRuka].skills[0].bonus = SkillBonus::None;
     c.chars[kRuka].skills[1].bonus = SkillBonus::DpEff;
     c.chars[kTama].skills[1].bonus = SkillBonus::Devastation;

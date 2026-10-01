@@ -226,8 +226,8 @@ void drawBadgeDefDown(float cx, float cy, float scale = 1.f) {
     const float z = kZBadge + 0.01f;
     const float kShield = 1.3f;
     const float s = scale * kShield;
-    const float ox  = snapPx(cx - 2.2f * scale);          // sumbu tengah perisai
-    const float hw  = std::round(2.2f * s);               // setengah lebar, bilangan bulat
+    const float ox  = snapPx(cx - 2.2f * scale);
+    const float hw  = std::round(2.2f * s);
     const float ax0 = ox - hw, ax1 = ox + hw;
     const float ay0 = snapPx(cy - 1.0f * scale - 2.7f * s);
     const float ay1 = ay0 + std::round(2.6f * s);
@@ -335,13 +335,13 @@ const float kBossFxX = 270.f, kBossFxY = 80.f;
 
 const float kOdBadgeR  = 18.f;
 const float kOdBadgeCy = 24.f;
-const float kOdBadgeCx = kTopWidth - 6.f - kOdBadgeR;            // 376: badge nempel tepi kanan layar
+const float kOdBadgeCx = kTopWidth - 6.f - kOdBadgeR;
 const float kOdBarH = 12.f;
 const float kOdBarY = kOdBadgeCy - kOdBarH * 0.5f;
 const float kOdBarW = 100.f;
 const float kOdBarX = kOdBadgeCx - kOdBadgeR + 8.f - kOdBarW;    // nempel & dikit tertimpa badge
 
-const int   kFxLife       = 60;    // efek dibuang setelah sekian frame sejak mulai
+const int   kFxLife       = 60;
 const int   kNumberLife   = 38;
 const int   kBreakLife    = 40;
 const int   kRingLife     = 22;
@@ -351,7 +351,7 @@ const int   kShakeLife    = 10;
 const int   kSlashLife    = 10;
 const int   kShotTravel   = 7;
 const int   kShotSpark    = 7;
-const int   kShotLife     = kShotTravel + kShotSpark;   // senjata jarak jauh (Yuki, Tsukasa)
+const int   kShotLife     = kShotTravel + kShotSpark;
 const float kZFx          = 0.65f; // bentuk efek: di atas semua teks (kZText = 0.60)
 
 // Yuki dan Tsukasa pakai senjata jarak jauh (busur/senapan), jadi hit-nya berupa peluru yang
@@ -455,7 +455,6 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
         }
     }
 
-    // Teks digambar dulu, bentuk efek di atasnya
     for (const FxItem& it : fx_) {
         const FxEvent& e = it.ev;
         const int age = frame_ - it.start;
@@ -591,7 +590,6 @@ void BattleScreen::enter() {
     keyHoldStartFrame_ = -1;
     keyHoldFired_ = false;
 
-    // Snap semua bar ke nilai awal (bukan animasi dari 0) saat battle baru mulai.
     for (int i = 0; i < 3; ++i) {
         allyDpAnim_[i].snap(battle_.party().front[i].dp);
         allyHpAnim_[i].snap(battle_.party().front[i].hp);
@@ -865,7 +863,7 @@ void BattleScreen::update(const TouchState& touch, u32 keysDown, u32 keysHeld) {
     if (hit == ButtonGroup::kNone) return;
     if (suppressNextSkillHit_) {
         suppressNextSkillHit_ = false;
-        if (hit == BtnSkill0 || hit == BtnSkill0 + 1) return;    // sudah dipakai gesture, abaikan
+        if (hit == BtnSkill0 || hit == BtnSkill0 + 1) return;
     }
 
     handle(hit);
@@ -941,7 +939,7 @@ void BattleScreen::updateButtonsInput(u32 keysDown, u32 keysHeld) {
                 else { doSwap(selected_, swapCursor_); selected_ = -1; }
             }
         } else {
-            if (up) confirmFocus_ = false;   // balik ke baris bawah kotak swap
+            if (up) confirmFocus_ = false;
             if (keysDown & KEY_A) handle(BtnConfirm);
         }
         if (keysDown & (KEY_Y | KEY_B)) { menu_ = Menu::Plan; resetSwapState(); }
@@ -1131,7 +1129,7 @@ void BattleScreen::drawPlanning(TextRenderer& text) const {
     const Command& cmd = battle_.command(slot_);
 
     for (int k = 0; k < 3; ++k) {
-        const int j = k - 1;                                   // indeks skill, -1 = Attack
+        const int j = k - 1;
         if (j >= 0 && !c.skills[j].valid()) continue;
         const bool isAttack = (k == 0);
         const bool enabled = isAttack || battle_.canUseSkill(slot_, j);
@@ -1226,7 +1224,7 @@ void BattleScreen::drawSwapScreen(TextRenderer& text) const {
 
     for (int id = 0; id < 6; ++id) {
         const float cx = swapX(id) + kSwapTile * 0.5f, cy = swapY(id) + kSwapTile * 0.5f;
-        const float r = (id < 3) ? 26.f : 22.f;                      // front lebih besar dari back
+        const float r = (id < 3) ? 26.f : 22.f;
         const bool lifted = dragging_ && id == dragFrom_;
         const bool picked = (id == selected_ || lifted);
         const bool over = (dragging_ && id == hover);

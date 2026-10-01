@@ -92,7 +92,7 @@ AttackSummary performAttack(const Skill& s, const Combatant& att, Combatant& t) 
 
     if (s.stun_chance > 0 && t.is_enemy && t.alive() && std::rand() % 100 < s.stun_chance) {
         t.stunned = true;
-        ++t.stun_skips;                              // menumpuk dengan stun dari break/skill lain
+        ++t.stun_skips;
         sum.stunned = true;
     }
     return sum;
@@ -111,7 +111,7 @@ void addEffect(Combatant& c, EffectType type, int value, int turns) {
     int count = 0;
     for (const auto& e : c.effects)
         if (e.type == type) ++count;
-    if (count >= kMaxEffectStacks) {                 // penuh: tumpukan tertua diganti
+    if (count >= kMaxEffectStacks) {
         for (auto it = c.effects.begin(); it != c.effects.end(); ++it) {
             if (it->type == type) { c.effects.erase(it); break; }
         }
@@ -201,7 +201,7 @@ void healPartyDP(Party& p, int amount) {
     auto healOne = [amount](Combatant& c) {
         if (!c.alive()) return;
         c.dp = std::min(c.max_dp, c.dp + amount);
-        if (c.dp > 0) c.broken = false;              // heal DP = pulih dari break
+        if (c.dp > 0) c.broken = false;
     };
     for (auto& c : p.front) healOne(c);
     for (auto& c : p.back)  healOne(c);
@@ -366,7 +366,7 @@ void Battle::recordHits(const AttackSummary& a, bool onEnemy, int slot, int base
             b.kind = FxKind::Break;
             b.on_enemy = onEnemy;
             b.slot = slot;
-            b.delay = delay + 2;                        // sesaat setelah angka hit yang memecahkan DP
+            b.delay = delay + 2;
             fx_.push_back(b);
             fxSpan_ = std::max(fxSpan_, b.delay);
         }
@@ -458,7 +458,7 @@ void Battle::swapFront(int a, int b) {
     if (phase_ != BattlePhase::Planning || a == b) return;
     if (a < 0 || a > 2 || b < 0 || b > 2) return;
     std::swap(party_.front[a], party_.front[b]);
-    std::swap(cmds_[a], cmds_[b]);                   // aksi ikut pindah bersama karakternya
+    std::swap(cmds_[a], cmds_[b]);
     message_ = party_.front[a].name + " and " + party_.front[b].name + " swap places.";
 }
 
@@ -550,7 +550,7 @@ void Battle::runPlayerAction(int slot) {
     if (cmd.type == CommandType::Skill) {
         const Skill& cand = c.skills[cmd.skill];
         if (cand.valid() && c.sp >= cand.sp_cost && c.uses_left[cmd.skill] != 0) {
-            s = cand;                                    // SP/pemakaian kurang: jatuh ke Attack
+            s = cand;
             usedIdx = cmd.skill;
         }
     }
@@ -586,7 +586,7 @@ void Battle::runPlayerAction(int slot) {
         report(c.name, s.name, s.is_basic, a);
         if (s.fx.type != EffectType::None && enemy_.alive()) applyFx(s.fx, c);
         if (s.sp_gain > 0 && std::rand() % 100 < s.sp_gain_chance) {
-            c.sp = gainSpCapped(c.sp, s.sp_gain, kMaxSP);   // gimmick turn biasa: cap tetap kMaxSP
+            c.sp = gainSpCapped(c.sp, s.sp_gain, kMaxSP);
             message_ += " " + c.name + "'s SP is restored!";
         }
     }
@@ -628,7 +628,7 @@ void Battle::updateExecution() {
         }
         return;
     }
-    timer_ = kStepDelay + fxSpan_;                   // tunggu angka hit beruntun selesai muncul
+    timer_ = kStepDelay + fxSpan_;
     fxSpan_ = 0;
 }
 
@@ -720,7 +720,6 @@ void Battle::updateAwakening() {
     enemyActPending_ = false;
     // Bos baru hanya mereset break, stun, devastation, dan debuff musuh.
     // HP, DP, SP, formasi, efek, dan sisa pemakaian skill party terbawa ke battle 2.
-    // TUNING: fase Awaken lebih tangguh lagi (DP 110->160, HP 950->1300).
     enemy_ = Combatant("Awaken Hellspider", "Boss", 160, 1300, 0, Skill(), Skill());
     enemy_.is_enemy = true;
     enemy_.sp = 0;

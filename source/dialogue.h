@@ -16,7 +16,7 @@ class DialogueScene {
 public:
     void load(const std::vector<DialogueLine>& lines);
 
-    void update();      // efek mesin ketik, panggil tiap frame
+    void update();
     void advance();     // ketuk: tampilkan semua teks, atau lanjut ke baris berikut
     void skipAll();
 
@@ -37,7 +37,7 @@ private:
 
     std::vector<DialogueLine> lines_;
     std::size_t index_    = 0;
-    float       revealed_ = 0.f;    // jumlah byte yang sudah tampil
+    float       revealed_ = 0.f;
     bool        finished_ = true;
 };
 

@@ -80,7 +80,7 @@ int main(int /*argc*/, char** /*argv*/) {
             if (customize.wantsExit()) {
                 partyCfg = customize.config();
                 party_config::save(kPartyPath, partyCfg);   // gagal simpan (SD terkunci) tidak fatal
-                state = GameState::Dialogue;                // dialog lanjut dari baris terakhir
+                state = GameState::Dialogue;
             }
             break;
         case GameState::Battle:

@@ -19,9 +19,9 @@ enum ButtonId {
 };
 
 // Halaman Roster: 3 kolom x 2 baris kotak karakter.
-const float kTileW = 94.f, kTileH = 80.f;
-float tileX(int i) { return 10.f + (i % 3) * 103.f; }   
-float tileY(int i) { return 32.f + (i / 3) * 86.f; }
+const float kTileW = 96.f, kTileH = 80.f;
+float tileX(int i) { return 10.f + (i % 3) * 104.f; }
+float tileY(int i) { return 34.f + (i / 3) * 88.f; }
 
 // Halaman Roster dan Character: tombol bawah.
 const float kFootY = 206.f, kFootH = 28.f;
@@ -38,22 +38,18 @@ float rowY(int visibleIndex) { return kRowY0 + visibleIndex * kRowStep; }
 // Bonus, Effect, Target) memakai panah kiri/kanan. Digambar sendiri (bukan lewat ButtonGroup::draw).
 const float kBtnR = 8.5f;                       // radius gambar; lebih kecil dari tinggi baris
 const float kBtnHit = 22.f;                     // kotak area sentuh (lingkaran r = 11), lebih lega dari gambar
-const float kBtnCxL = 176.f, kBtnCxR = 284.f;
+const float kBtnCxL = 176.f, kBtnCxR = 284.f;   // pusat tombol kiri dan kanan
 
 enum class Glyph { Minus, Plus, Left, Right };
 
-const u32 kRingIdle = C2D_Color32(255, 255, 255, 150);
+// Warna kartu/tombol/baris yang sama dengan baris skill di battle (BattleScreen::drawPlanning):
+// isi pink tipis + garis tepi putih redup; "chosen" (di sini: sudah diubah pemain) = garis pink.
+const u32 kRingIdle = C2D_Color32(255, 255, 255, 150);   // cincin potret idle, sama dengan battle
 u32 cardFill(bool chosen, bool pressed = false, bool enabled = true) {
     return mixColor(colors::bg, colors::pink, pressed ? 0.34f : (chosen ? 0.26f : (enabled ? 0.10f : 0.04f)));
 }
 u32 cardBorder(bool chosen, bool enabled = true) {
     return chosen ? colors::pink : mixColor(colors::bg, colors::white, enabled ? 0.45f : 0.2f);
-}
-
-const float kCardRadius = 12.f;
-void drawRoundCard(float x, float y, float w, float h, u32 fill, u32 border) {
-    drawRoundRect(x, y, w, h, kCardRadius, border, kZPanel);
-    drawRoundRect(x + 1.6f, y + 1.6f, w - 3.2f, h - 3.2f, kCardRadius - 1.6f, fill, kZPanel + 0.01f);
 }
 
 bool isChoiceField(SkillField f) {
@@ -67,6 +63,7 @@ void addRoundButton(ButtonGroup& g, int id, float cx, float cy, bool enabled) {
 void drawRoundButton(float cx, float cy, bool enabled, bool pressed, Glyph g) {
     cy += pressed ? 1.5f : 0.f;
     const u32 accent = enabled ? colors::pink : colors::grey;
+    // Sama seperti tombol Swap di battle: cincin pink, isi pink tipis, pink tua saat ditekan.
     const u32 fill = pressed ? colors::pinkDeep : mixColor(colors::bg, accent, enabled ? 0.35f : 0.06f);
     drawDisc(cx, cy, kBtnR, accent, kZPanel);
     drawDisc(cx, cy, kBtnR - 1.6f, fill, kZPanel + 0.01f);
@@ -96,19 +93,17 @@ float fitScale(TextRenderer& text, const std::string& s, float base, float maxW)
     return w > maxW ? std::max(0.25f, base * maxW / w) : base;
 }
 
-std::string fxText(const SkillCfg& s, bool showTarget = true) {
+std::string fxText(const SkillCfg& s) {
     SkillEffect fx;
     fx.type  = s.fx_type;
     fx.value = s.fx_value;
     fx.turns = s.fx_turns;
-    // Target (team/enemy) sudah jelas dari jenis buff/debuff, jadi bisa disembunyikan
-    // di ringkasan roster. Scope Self tidak menambahkan akhiran apa pun.
-    fx.scope = showTarget ? s.fx_scope : EffectScope::Self;
+    fx.scope = s.fx_scope;
     return effectLabel(fx);
 }
 
-// Ringkasan satu baris, mis. "9 hits x 6  ATK+40%(1t) team" (showTarget=false: tanpa "team"/"enemy").
-std::string skillLine(const SkillCfg& s, bool showTarget = true) {
+// Ringkasan satu baris, mis. "9 hits x 6  ATK+40%(1t) team".
+std::string skillLine(const SkillCfg& s) {
     char buf[48];
     std::string out;
     if (s.kind == SkillKind::Attack) {
@@ -118,7 +113,7 @@ std::string skillLine(const SkillCfg& s, bool showTarget = true) {
         std::snprintf(buf, sizeof buf, "Heal %d DP", s.power);
         out = buf;
     }
-    const std::string fx = fxText(s, showTarget);
+    const std::string fx = fxText(s);
     if (!fx.empty()) {
         if (!out.empty()) out += "  ";
         out += fx;
@@ -182,7 +177,7 @@ void CustomizeScreen::say(const char* msg) {
 
 void CustomizeScreen::buildButtons() {
     buttons_.begin();
-    buttons_.useBattleStyle(true);     
+    buttons_.useBattleStyle(true);        // warna tombol sama dengan battle; lingkaran - + dan panah digambar sendiri
     switch (page_) {
     case Page::Roster:
         for (int i = 0; i < kRosterSize; ++i)
@@ -317,33 +312,31 @@ void CustomizeScreen::drawTop(TextRenderer& text) const {
 
     for (int i = 0; i < kRosterSize; ++i) {
         const CharCfg& c = cfg_.chars[i];
-        const float x = 4.f + (i % 3) * 132.f, y = 26.f + (i / 3) * 100.f;  
+        const float x = 6.f + (i % 3) * 132.f, y = 26.f + (i / 3) * 100.f;
         const bool selected = page_ != Page::Roster && i == ch_;
         const bool marked = selected || isModified(cfg_, i);
-        drawRoundCard(x, y, 128, 96, cardFill(selected), cardBorder(marked));
+        drawPanel(x, y, 128, 96, cardFill(selected), cardBorder(marked));
 
-        const float kRoleScale = 0.38f, kInnerW = 116.f;
-        const float roleW = text.width(c.role.c_str(), kRoleScale);
-        text.drawShadow(c.name.c_str(), x + 6, y + 4, fitScale(text, c.name, 0.55f, kInnerW - roleW - 6.f), colors::white);
-        text.drawRight(c.role.c_str(), x + 6 + kInnerW, y + 9, kRoleScale, colors::grey);
+        text.drawShadow(c.name.c_str(), x + 8, y + 5, fitScale(text, c.name, 0.5f, 112.f), colors::white);
+        text.drawShadow(c.role.c_str(), x + 8, y + 22, 0.3f, colors::grey);
         for (int j = 0; j < 2; ++j) {
             const SkillCfg& s = c.skills[j];
-            const float sy = y + 28.f + j * 33.f;
-            text.drawShadow(s.name.c_str(), x + 6, sy, fitScale(text, s.name, 0.44f, kInnerW), colors::white);
-            std::string line = skillLine(s, false);
+            const float sy = y + 38.f + j * 29.f;
+            text.drawShadow(s.name.c_str(), x + 8, sy, fitScale(text, s.name, 0.36f, 112.f), colors::white);
+            std::string line = skillLine(s);
             const std::string bonus = bonusText(s);
             if (!bonus.empty()) line += "  " + bonus;
-            text.drawShadow(line.c_str(), x + 6, sy + 16, fitScale(text, line, 0.38f, kInnerW), colors::cyanLight);
+            text.drawShadow(line.c_str(), x + 8, sy + 13, fitScale(text, line, 0.28f, 112.f), colors::cyanLight);
         }
     }
 
     if (frame_ - toastFrame_ < kToastFrames && !toast_.empty()) {
-        text.drawCentered(toast_.c_str(), 200, 231, 0.42f, colors::pinkLight);
+        text.drawCentered(toast_.c_str(), 200, 230, 0.36f, colors::pinkLight);
     } else {
         const char* hint = page_ == Page::Roster ? "Tap a character to edit. Done saves your party."
                          : page_ == Page::Character ? "Tap a skill to edit it, or Rename the character."
                                                     : "Use - and + for numbers, the arrows to pick an option.";
-        text.drawCentered(hint, 200, 231, 0.4f, colors::grey);
+        text.drawCentered(hint, 200, 230, 0.32f, colors::grey);
     }
 }
 
@@ -370,11 +363,12 @@ void CustomizeScreen::drawRoster(TextRenderer& text) const {
         const float cx = x + kTileW * 0.5f;
         const bool modified = isModified(cfg_, i);
 
-        drawRoundCard(x, y, kTileW, kTileH, cardFill(modified, buttons_.pressed(BtnTile0 + i)), cardBorder(modified));
-        drawRing(cx, y + 27, 22.f, modified ? colors::pink : kRingIdle, kZFill, false);  
+        drawPanel(x, y, kTileW, kTileH, cardFill(modified, buttons_.pressed(BtnTile0 + i)), cardBorder(modified));
+        drawRing(cx, y + 27, 22.f, modified ? colors::pink : kRingIdle, kZFill, false);   // cincin potret seperti di battle
+        text.drawShadow(i < 3 ? "FRONT" : "BACK", x + 8, y + 4, 0.26f, colors::grey);
         drawIconFor(text, c, cx, y + 27, 40.f);
-        text.drawCentered(c.name.c_str(), cx, y + 58, fitScale(text, c.name, 0.44f, 86.f), colors::white);
-        text.drawCentered(c.role.c_str(), cx, y + 71, 0.34f, modified ? colors::pinkLight : colors::grey);
+        text.drawCentered(c.name.c_str(), cx, y + 56, fitScale(text, c.name, 0.42f, 86.f), colors::white);
+        text.drawCentered(c.role.c_str(), cx, y + 70, 0.28f, modified ? colors::pinkLight : colors::grey);
     }
 }
 
@@ -383,7 +377,7 @@ void CustomizeScreen::drawCharacter(TextRenderer& text) const {
     drawRing(34, 30, 24.f, colors::pink, kZFill, false);
     drawIconFor(text, c, 34, 30, 44.f);
     text.drawShadow(c.name.c_str(), 66, 12, fitScale(text, c.name, 0.6f, 146.f), colors::white);
-    text.drawShadow(c.role.c_str(), 66, 34, 0.4f, colors::pinkLight);
+    text.drawShadow(c.role.c_str(), 66, 34, 0.34f, colors::pinkLight);
 
     for (int j = 0; j < 2; ++j) {
         const SkillCfg& s = c.skills[j];
@@ -398,9 +392,9 @@ void CustomizeScreen::drawCharacter(TextRenderer& text) const {
         text.drawRight(buf, 296, y + 7 + off, 0.42f, colors::pinkLight);
         const std::string line = skillLine(s);
         const std::string bonus = bonusText(s);
-        text.drawShadow(line.c_str(), 26, y + 24 + off, fitScale(text, line, 0.4f, bonus.empty() ? 260.f : 190.f),
+        text.drawShadow(line.c_str(), 26, y + 24 + off, fitScale(text, line, 0.34f, bonus.empty() ? 260.f : 190.f),
                         colors::cyanLight);
-        if (!bonus.empty()) text.drawRight(bonus.c_str(), 296, y + 24 + off, 0.4f, colors::yellow);
+        if (!bonus.empty()) text.drawRight(bonus.c_str(), 296, y + 24 + off, 0.34f, colors::yellow);
     }
 
     drawPill(8, kClassRowY, 304, kRowH, cardFill(false), cardBorder(false), kZPanel - 0.02f);
@@ -417,7 +411,7 @@ void CustomizeScreen::drawSkill(TextRenderer& text) const {
     text.drawShadow(s.name.c_str(), 12, 6, fitScale(text, s.name, 0.55f, 210.f), colors::white);
     char buf[64];
     std::snprintf(buf, sizeof buf, "%s  -  skill %d", c.name.c_str(), sk_ + 1);
-    text.drawShadow(buf, 12, 26, 0.4f, colors::grey);
+    text.drawShadow(buf, 12, 26, 0.32f, colors::grey);
 
     int k = 0;
     for (int f = 0; f < kSkillFieldCount; ++f) {

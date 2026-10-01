@@ -31,7 +31,7 @@ T clampv(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 struct FxRange {
     int  vmin, vmax, vstep;   // nilai (persen; DevUp: poin devastation rate)
-    int  tmin, tmax;          // durasi
+    int  tmin, tmax;
     bool buff;                // buff: target Self/AllFront/AllParty. Debuff: selalu Enemy.
 };
 
@@ -40,10 +40,10 @@ struct FxRange {
 FxRange rangeOf(EffectType t) {
     switch (t) {
     case EffectType::AtkUp:   return {  5, 80, 5, 0, kFxTurnsMax, true };
-    case EffectType::DefUp:   return {  5, 70, 5, 1, kFxTurnsMax, true };    // 70 = kMaxDefUpPct
+    case EffectType::DefUp:   return {  5, 70, 5, 1, kFxTurnsMax, true };
     case EffectType::DevUp:   return {  1, 20, 1, 0, kFxTurnsMax, true };
     case EffectType::DefDown: return {  5, 80, 5, 1, kFxTurnsMax, false };
-    case EffectType::AtkDown: return {  5, 60, 5, 1, kFxTurnsMax, false };   // 60 = kMaxAtkDownPct
+    case EffectType::AtkDown: return {  5, 60, 5, 1, kFxTurnsMax, false };
     default:                  return {  0,  0, 1, 0, 0, false };
     }
 }
@@ -298,7 +298,7 @@ Party buildParty(const PartyConfig& in) {
             s.name    = intern(k.name);
             s.sp_cost = k.sp_cost;
             s.bonus   = k.bonus;
-            s.refreshBonus();                  // hp_pct/dp_pct/dev_mult dari bonus skill ini
+            s.refreshBonus();
             if (k.kind == SkillKind::Attack) { s.hits = k.hits; s.power = k.power; }
             if (k.kind == SkillKind::HealDP) { s.power = k.power; }
             if (k.kind == SkillKind::Attack || k.kind == SkillKind::Support) {
@@ -364,7 +364,7 @@ bool save(const std::string& path, const PartyConfig& in) {
     std::fprintf(f, "# Bisa diedit lewat layar Customize (tekan SELECT saat dialog) atau langsung di sini.\n");
     std::fprintf(f, "# role: attacker breaker blaster healer buffer debuffer\n");
     std::fprintf(f, "#   Hanya label, tanpa efek. Bonus diatur per skill lewat skillN.bonus.\n");
-    std::fprintf(f, "# bonus: none hp dp dev (hp = damage HP +30%%, dp = damage DP +30%% (EX +50%%), dev = devastation x4 (EX x5))\n");
+    std::fprintf(f, "# bonus: none hp dp dev (hp = damage HP +30%%, dp = damage DP +30%%, dev = devastation x4 (skill EX x5))\n");
     std::fprintf(f, "# fx: none atk_up def_up dev_up def_down atk_down\n");
     std::fprintf(f, "# fx_scope: self front party (buff) | enemy (debuff, otomatis)\n");
     std::fprintf(f, "# Nilai di luar batas dijepit otomatis saat game dimuat.\n\n");
@@ -426,7 +426,7 @@ std::string bonusText(const SkillCfg& s) {
         std::snprintf(buf, sizeof buf, "HP +%d%%", kHpEffPct - 100);
         return buf;
     case SkillBonus::DpEff:
-        std::snprintf(buf, sizeof buf, "DP +%d%%", (s.ex ? kDpEffExPct : kDpEffPct) - 100);
+        std::snprintf(buf, sizeof buf, "DP +%d%%", kDpEffPct - 100);
         return buf;
     case SkillBonus::Devastation:
         std::snprintf(buf, sizeof buf, "DEV x%d", s.ex ? kBlasterSignatureDevMult : kBlasterDevMult);

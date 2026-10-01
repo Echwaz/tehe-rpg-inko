@@ -69,7 +69,7 @@ void testSquareCanvasRegardlessOfAspectRatio() {
     std::vector<uint8_t> out;
     const bool ok = icon_loader::loadResized(wide, 32, out);
     assert(ok);
-    assert(out.size() == 32u * 32u * 4u);   // tetap dipaksa jadi kotak, sama seperti tex3ds
+    assert(out.size() == 32u * 32u * 4u);
     std::remove(wide.c_str());
 }
 

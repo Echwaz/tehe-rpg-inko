@@ -104,7 +104,7 @@ std::string sanitizeText(const std::string& in, int maxChars, const std::string&
 // ---- Class ----
 // Pindah ke class berikutnya (+1) / sebelumnya (-1), berputar mengikuti urutan roleName().
 void        stepRole(CharCfg& c, int dir);
-// Teks bonus sebuah skill: "HP +30%", "DP +50%" (skill EX), "DEV x5"; kosong bila tanpa bonus.
+// Teks bonus sebuah skill: "HP +30%", "DP +30%", "DEV x4" (skill EX: "DEV x5"); kosong bila tanpa bonus.
 std::string bonusText(const SkillCfg& s);
 
 enum class SkillField { SpCost, Hits, Power, Bonus, FxType, FxValue, FxTurns, FxScope };

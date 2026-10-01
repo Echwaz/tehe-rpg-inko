@@ -25,7 +25,7 @@ private:
     DialogueScene scene_;
     ButtonGroup   buttons_;
     Mode          mode_         = Mode::Normal;
-    bool          windowHidden_ = false;   // tombol HIDE: sembunyikan kotak dialog
+    bool          windowHidden_ = false;
     std::size_t   logTop_       = 0;
     int           frame_        = 0;
 };
@@ -59,7 +59,7 @@ private:
     ButtonGroup buttons_;
     Page        page_ = Page::Roster;
     int         ch_ = 0;               // karakter terpilih 0..5 (0..2 front bawaan, 3..5 back bawaan)
-    int         sk_ = 0;               // skill terpilih 0..1
+    int         sk_ = 0;
     bool        exit_ = false;
     bool        confirmReset_ = false; // "Reset All" butuh dua ketukan
     int         frame_ = 0;
@@ -114,7 +114,7 @@ private:
     // Efek visual battle (angka damage/heal, flash, cincin break). Sumbernya event dari Battle.
     struct FxItem {
         FxEvent ev;
-        int     start;     // frame_ saat efek mulai tampil
+        int     start;
         bool    applied;   // status visual bos (break/stun) sudah dinyalakan oleh event ini
         FxItem(const FxEvent& e, int s) : ev(e), start(s), applied(false) {}
     };
@@ -136,7 +136,7 @@ private:
     // Kursor tombol fisik (paralel dengan status sentuh di atas)
     int  menuCursor_       = 0;    // baris disorot di Planning: 0 Attack, 1 Skill0, 2 Skill1
     bool usingButtons_     = false; // true selama pemain terakhir pakai tombol fisik (bukan sentuh)
-    int  swapCursor_       = 0;    // kotak disorot (0..5) di layar Swap
+    int  swapCursor_       = 0;
     bool confirmFocus_     = false; // true = kursor sedang di tombol Confirm layar Swap
     int  keyHoldRow_       = -1;   // baris skill yang sedang ditahan tombol A (-1 = tidak ada)
     int  keyHoldStartFrame_ = -1;

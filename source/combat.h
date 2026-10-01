@@ -48,18 +48,17 @@ constexpr int kBlasterDevMult     = 4;    // dev_mult skill biasa Blaster: 4x le
 constexpr int kBlasterSignatureDevMult = 5;   // dev_mult skill andalan (EX) Blaster: 5x lebih cepat
 constexpr int kHpEffPct           = 130;  // bonus HP Eff: damage ke HP jadi 130% (semua skill)
 constexpr int kDpEffPct           = 130;  // bonus DP Eff: damage ke DP jadi 130%
-constexpr int kDpEffExPct         = 150;  // bonus DP Eff pada skill EX: 150%
 constexpr int kMaxDevastation     = 300;
-constexpr int kMaxEffectStacks    = 2;    // tumpukan maksimum per jenis efek
-constexpr int kMaxDefUpPct        = 70;   // batas pengurangan damage dari DefUp
-constexpr int kMaxAtkDownPct      = 60;   // batas pengurangan damage dari AtkDown
+constexpr int kMaxEffectStacks    = 2;
+constexpr int kMaxDefUpPct        = 70;
+constexpr int kMaxAtkDownPct      = 60;
 constexpr int kEnemyFocusPower    = 30;   // TUNING: damage serangan fokus musuh (1 hit total), fase Awaken
 constexpr int kEnemyAoePower      = 15;   // TUNING: damage serangan massal musuh (per anggota), fase Awaken
 constexpr int kEnemyFocusPowerPhase1 = 18;   // TUNING: fase 1 (Hellspider) dibuat lebih santai
 constexpr int kEnemyAoePowerPhase1   = 8;    // TUNING: fase 1 (Hellspider) dibuat lebih santai
 constexpr int kMaxDevastationAwaken  = 999;  // TUNING: cap devastation rate lebih tinggi khusus fase Awaken
-constexpr int kStepDelay          = 50;   // frame antar aksi pemain
-constexpr int kEnemyDelay         = 60;   // frame sebelum musuh bergerak
+constexpr int kStepDelay          = 50;
+constexpr int kEnemyDelay         = 60;
 constexpr int kStunEndDelay       = 30;   // jeda antara visual stun hilang dan musuh menyerang
 
 // Gauge terisi dari tiap hit yang mengenai musuh (dp atau hp, tidak masalah). Setiap
@@ -70,7 +69,7 @@ constexpr int kStunEndDelay       = 30;   // jeda antara visual stun hilang dan 
 // (total giliran per stage: kOdTotalTurns, sudah termasuk giliran aktivasi) habis. Giliran ekstra TIDAK memicu
 // giliran musuh dan TIDAK meregen SP/menjalankan tickEffects (lihat startExtraRound()).
 constexpr int kOdHitsPerBar       = 15;   // TUNING
-constexpr int kOdMaxBars          = 3;    // jumlah stage OD
+constexpr int kOdMaxBars          = 3;
 constexpr std::array<int, kOdMaxBars> kOdMultPct = {{ 110, 120, 130 }};  // TUNING
 constexpr std::array<int, kOdMaxBars> kOdTotalTurns = {{ 1, 2, 3 }};  // TUNING: total giliran OD per stage (termasuk giliran aktivasi)
 constexpr std::array<int, kOdMaxBars> kOdSpGrant = {{ 6, 12, 20 }};  // TUNING
@@ -95,7 +94,7 @@ struct StatusEffect {
 };
 
 // Bonus yang dipasang ke sebuah skill serangan (bukan ke class). Angkanya ditentukan konstanta di
-// atas; skill EX mendapat bonus DP Eff dan Devastation yang lebih besar.
+// atas. HP Eff dan DP Eff sama untuk semua skill; hanya Devastation yang lebih besar di skill EX.
 enum class SkillBonus { None, HpEff, DpEff, Devastation };
 constexpr int kSkillBonusCount = 4;
 
@@ -103,7 +102,7 @@ struct Skill {
     const char* name   = "";
     SkillKind   kind   = SkillKind::Attack;
     int sp_cost = 0;
-    int hits    = 1;      // jumlah hit (Attack)
+    int hits    = 1;
     int power   = 0;      // damage per hit (Attack) atau DP dipulihkan ke tiap front (HealDP)
     int dp_pct  = 100;    // pengali damage saat mengenai DP (Breaker tinggi)
     int hp_pct  = 100;    // pengali damage saat mengenai HP (Attacker tinggi)
@@ -115,7 +114,7 @@ struct Skill {
     int max_uses = 0;     // 0 = tanpa batas
     int stun_chance = 0;  // % peluang membuat musuh stun (lewat giliran berikutnya)
     int sp_gain = 0;      // SP yang dipulihkan ke pemakai jika berhasil
-    int sp_gain_chance = 0;   // % peluang memulihkan SP
+    int sp_gain_chance = 0;
     const char* description = "";
 
     Skill() = default;
@@ -134,7 +133,7 @@ struct Skill {
         if (kind != SkillKind::Attack) return;
         switch (bonus) {
         case SkillBonus::HpEff:       hp_pct = kHpEffPct; break;
-        case SkillBonus::DpEff:       dp_pct = ex ? kDpEffExPct : kDpEffPct; break;
+        case SkillBonus::DpEff:       dp_pct = kDpEffPct; break;
         case SkillBonus::Devastation: dev_mult = ex ? kBlasterSignatureDevMult : kBlasterDevMult; break;
         case SkillBonus::None:        break;
         }
@@ -256,7 +255,7 @@ void  healPartyDP(Party& p, int amount);
 void  recoverFromBreak(Combatant& c);
 
 
-void addEffect(Combatant& c, EffectType type, int value, int turns);  // maks 2 tumpukan/jenis
+void addEffect(Combatant& c, EffectType type, int value, int turns);
 int  effectTotal(const Combatant& c, EffectType type);                 // jumlah nilai aditif
 // Awal giliran musuh: kurangi durasi efek (yang baru dipasang di ronde ini dilewati sekali), yang
 // mencapai 0 hilang sebelum musuh bertindak. Durasi 1 = bertahan sampai awal giliran musuh
@@ -264,7 +263,7 @@ int  effectTotal(const Combatant& c, EffectType type);                 // jumlah
 // durasinya lewat fungsi ini, supaya gampang ditumpuk terus; hanya direset saat Awaken
 // (lihat updateAwakening()).
 void tickEffects(Combatant& c);
-void consumeOneTimeBuffs(Combatant& c);      // habiskan AtkUp/DevUp setelah skill serangan
+void consumeOneTimeBuffs(Combatant& c);
 constexpr unsigned effectBit(EffectType t) { return 1u << static_cast<int>(t); }
 // skipMask: jenis efek (effectBit) yang tidak dituliskan, mis. karena sudah tampil sebagai icon.
 std::string effectSummary(const Combatant& c, unsigned skipMask = 0);   // mis. "ATK+x2 DEF+(2t)"
@@ -287,25 +286,25 @@ public:
     void clearPartyOverride() { hasPartyOverride_ = false; }
 
     void start();
-    void update();                       // panggil tiap frame
+    void update();
 
     bool canUseSkill(int slot, int skillIdx) const;
     bool setCommand(int slot, CommandType type, int skillIdx = 0);
     void swapSlot(int slot, int backIdx);   // gratis, tanpa batas
-    void swapFront(int a, int b);           // tukar urutan dua slot front (urutan eksekusi)
-    void swapBack(int a, int b);            // tukar urutan dua anggota back
+    void swapFront(int a, int b);
+    void swapBack(int a, int b);
     void execute();
 
     int  odGauge()        const { return odGauge_; }         // total hit terkumpul (lihat kOdHitsPerBar)
-    int  odBarsReady()    const { return odBarsReady_; }      // 0..kOdMaxBars, siap dipakai
+    int  odBarsReady()    const { return odBarsReady_; }
     bool odActive()        const { return odActive_; }
-    int  odTurnsLeft()     const { return odExtraTurns_; }   // sisa giliran ekstra OD yang belum terpakai
+    int  odTurnsLeft()     const { return odExtraTurns_; }
     // Counter tampilan "sisa/total": total = giliran saat OD diaktifkan + giliran ekstra
     // kOdTotalTurns[stage - 1], sisa = giliran yang masih berada di bawah OD, termasuk
     // giliran yang sedang berjalan. Keduanya 0 selama OD tidak aktif.
     int  odTurnsRemaining() const { return odActive_ ? odExtraTurns_ + 1 : 0; }
     int  odTurnsTotal()     const { return odActive_ ? odTotalTurns_ : 0; }
-    int  odLevel()          const { return odActive_ ? odLevel_ : 0; }   // 1..kOdMaxBars
+    int  odLevel()          const { return odActive_ ? odLevel_ : 0; }
     // Aktifkan OD memakai seluruh bar yang sudah terkumpul. false kalau belum Planning, belum
     // ada bar penuh, atau OD sedang aktif (tidak bisa OD berantai). Gauge/bar TIDAK berubah
     // saat gagal.
@@ -380,6 +379,6 @@ private:
     bool odActive_        = false;
     int  odExtraTurns_   = 0;
     int  odTotalTurns_   = 0;     // total giliran di bawah OD sejak diaktifkan (untuk counter "sisa/total")
-    int  odLevel_        = 0;     // stage OD yang sedang berjalan (1..kOdMaxBars)
+    int  odLevel_        = 0;
     int  odMultPct_       = 100;
 };
