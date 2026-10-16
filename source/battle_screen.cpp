@@ -11,6 +11,7 @@
 #include "circle_points.h"
 #include "screens.h"
 #include "sfx.h"
+#include "fx_audio.h"
 
 namespace {
 
@@ -411,7 +412,8 @@ void fxRing(float cx, float cy, float r, float thick, u32 c, float z) {
 // Geser horizontal angka supaya hit beruntun ke target yang sama tidak menumpuk di titik yang sama.
 float hitJitter(const FxEvent& e, float amp) {
     static const float kJit[5] = { 0.f, -0.9f, 0.8f, -0.4f, 1.f };
-    return kJit[(e.delay / kFxHitGap) % 5] * amp;
+    const int hit = e.style == hit_presentation::Style::Regular ? e.delay / kFxHitGap : e.hit_index;
+    return kJit[hit % 5] * amp;
 }
 float bossJitter(const FxEvent& e) { return hitJitter(e, 20.f); }
 
@@ -434,26 +436,6 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
     float bossX = kBossFxX, bossY = kBossFxY;
     if (scene3d) battle3d::enemyAnchor(bossX, bossY);
     if (fx_.empty()) return;
-
-    // Tiap event dibunyikan sekali, tepat di frame pertama ia tampil
-    for (const FxItem& it : fx_) {
-        const FxEvent& e = it.ev;
-        if (frame_ - it.start != 0) continue;
-        switch (e.kind) {
-        case FxKind::Damage:
-            if (e.on_enemy) {
-                const bool ranged = e.attacker_slot >= 0 && e.attacker_slot < 3 &&
-                    isRangedAttacker(battle_.party().front[e.attacker_slot].key);
-                sfx::play(ranged ? sfx::Id::HitRanged : sfx::Id::HitMelee);
-            } else {
-                sfx::play(sfx::Id::AllyHit);
-            }
-            break;
-        case FxKind::Heal:  sfx::play(sfx::Id::Heal);  break;
-        case FxKind::Break: sfx::play(sfx::Id::Break); break;
-        case FxKind::Stun:  sfx::play(sfx::Id::Stun);  break;
-        }
-    }
 
     for (const FxItem& it : fx_) {
         const FxEvent& e = it.ev;
@@ -478,7 +460,7 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
             std::snprintf(buf, sizeof buf, "%d", e.dp > 0 ? e.dp : e.hp);
             fill = colors::white;
             outline = e.dp > 0 ? colors::cyan : colors::pink;
-            base = 0.7f;
+            base = e.finisher ? 0.82f : 0.7f;
             rise = e.on_enemy ? 26.f : 20.f;
             life = kNumberLife;
         } else if (e.kind == FxKind::Heal) {
@@ -518,7 +500,8 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
         const int age = frame_ - it.start;
         if (age < 0) continue;
 
-        const bool ranged = e.attacker_slot >= 0 && e.attacker_slot < 3 &&
+        const bool ranged = e.style == hit_presentation::Style::Regular &&
+            e.attacker_slot >= 0 && e.attacker_slot < 3 &&
             isRangedAttacker(battle_.party().front[e.attacker_slot].key);
 
         if (e.kind == FxKind::Damage && e.on_enemy && ranged && age < kShotLife) {
@@ -538,14 +521,25 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
                 fxRing(tx, ty, 3.f + 12.f * easeOut(t), 1.6f - 1.f * t,
                        withAlpha(col, 230.f * (1.f - t)), kZFx);
             }
-        } else if (e.kind == FxKind::Damage && e.on_enemy && !ranged && age < kSlashLife) {
-            const float dir = ((e.delay / kFxHitGap) % 2 == 0) ? 1.f : -1.f;
+        } else if (e.kind == FxKind::Damage && e.on_enemy && !ranged &&
+                   age < kSlashLife + (e.finisher ? 4 : 0)) {
+            const auto accent = hit_presentation::impact(e.style, e.finisher);
+            const int hit = e.style == hit_presentation::Style::Regular ? e.delay / kFxHitGap : e.hit_index;
+            const float dir = (hit % 2 == 0) ? 1.f : -1.f;
             const float cx = bossX + bossJitter(e), cy = bossY;
-            const float half = 6.f + 26.f * easeOut(age / 4.f);
+            const float half = (6.f + 26.f * easeOut(age / 4.f)) * accent.slashScale;
             const float dx = 0.82f * half, dy = -0.57f * half * dir;
-            const float a = age < 3 ? 255.f : 255.f * (1.f - (age - 3) / static_cast<float>(kSlashLife - 3));
-            drawLine(cx - dx, cy - dy, cx + dx, cy + dy, 4.f, withAlpha(colors::pink, a * 0.6f), kZFx);
-            drawLine(cx - dx, cy - dy, cx + dx, cy + dy, 1.8f, withAlpha(colors::white, a), kZFx + 0.01f);
+            const int life = kSlashLife + (e.finisher ? 4 : 0);
+            const float a = age < 3 ? 255.f : 255.f * (1.f - (age - 3) / static_cast<float>(life - 3));
+            drawLine(cx - dx, cy - dy, cx + dx, cy + dy, e.finisher ? 5.5f : 4.f,
+                     withAlpha(colors::pink, a * 0.6f), kZFx);
+            drawLine(cx - dx, cy - dy, cx + dx, cy + dy, e.finisher ? 2.6f : 1.8f,
+                     withAlpha(colors::white, a), kZFx + 0.01f);
+            if (e.finisher && !e.breaks_target && age < 10) {
+                const float t = age / 10.f;
+                fxRing(cx, cy, 5.f + 19.f * easeOut(t), 2.f * (1.f - t),
+                       withAlpha(colors::pinkLight, 170.f * (1.f - t)), kZFx);
+            }
         } else if (e.kind == FxKind::Damage && !e.on_enemy && age < kAllyFlash) {
             const UnitPos u = unitPos(e.slot);
             fxFan(u.cx + allyShakeX(e.slot), u.cy, u.r - 2.4f,
@@ -825,7 +819,15 @@ void BattleScreen::update(const TouchState& touch, u32 keysDown, u32 keysHeld) {
     // bersamaan dengan kilatan/efeknya, tidak mendahului hit beruntun). MATI langsung mengikuti
     // logika. Break otomatis membuat stun, jadi event Break menyalakan keduanya.
     for (FxItem& it : fx_) {
-        if (it.applied || !it.ev.on_enemy || frame_ < it.start) continue;
+        if (frame_ < it.start) continue;
+        if (!it.sounded) {
+            const int slot = it.ev.attacker_slot;
+            const bool ranged = it.ev.style == hit_presentation::Style::Regular && slot >= 0 && slot < 3 &&
+                isRangedAttacker(battle_.party().front[slot].key);
+            fx_audio::play(it.ev, ranged);
+            it.sounded = true;
+        }
+        if (it.applied || !it.ev.on_enemy) continue;
         if (it.ev.kind == FxKind::Break) { bossBroken_ = true; bossStunned_ = true; it.applied = true; }
         else if (it.ev.kind == FxKind::Stun) { bossStunned_ = true; it.applied = true; }
     }
@@ -971,8 +973,9 @@ bool BattleScreen::drawScene3d(C3D_RenderTarget* target) const {
             continue;
         }
         if (item.ev.kind != FxKind::Damage) continue;
-        if (item.ev.on_enemy && age < 10)
-            state.hit = std::max(state.hit, 1.f - age / 10.f);
+        const auto accent = hit_presentation::impact(item.ev.style, item.ev.finisher);
+        if (item.ev.on_enemy && age < accent.recoilFrames)
+            state.hit = std::max(state.hit, accent.recoil * (1.f - static_cast<float>(age) / accent.recoilFrames));
         if (!item.ev.on_enemy && age < 18)
             state.attack = std::max(state.attack, std::sin(3.14159265f * age / 18.f));
     }

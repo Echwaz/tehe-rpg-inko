@@ -40,6 +40,7 @@ public:
     void drawTop(TextRenderer& text) const;
     void drawBottom(TextRenderer& text) const;
     bool wantsExit() const { return exit_; }
+    void saveFailed();
     const party_config::PartyConfig& config() const { return cfg_; }
 
 private:
@@ -65,6 +66,7 @@ private:
     int         frame_ = 0;
     std::string toast_;
     int         toastFrame_ = -1000;
+    bool        saveError_ = false;
 };
 
 class BattleScreen {
@@ -116,7 +118,8 @@ private:
         FxEvent ev;
         int     start;
         bool    applied;   // status visual bos (break/stun) sudah dinyalakan oleh event ini
-        FxItem(const FxEvent& e, int s) : ev(e), start(s), applied(false) {}
+        bool    sounded;
+        FxItem(const FxEvent& e, int s) : ev(e), start(s), applied(false), sounded(false) {}
     };
     void  drawFx(TextRenderer& text, bool scene3d) const;
     float allyShakeX(int slot) const;

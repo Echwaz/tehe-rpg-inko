@@ -1,3 +1,6 @@
+ifeq ($(MAKECMDGOALS),test)
+include tests/Makefile
+else
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
@@ -47,8 +50,8 @@ ICON            := meta/icon.png
 
 #---------------------------------------------------------------------------------
 # CIA packaging (opsional, lewat `make cia`): butuh makerom dan bannertool di PATH
-# (tidak disediakan oleh devkitPro pacman, lihat .github/workflows/build.yml untuk
-# cara mengambil binarynya). Build .3dsx biasa (`make`) tidak butuh ini sama sekali.
+# (tidak disediakan oleh devkitPro pacman, lihat readme.md).
+# Build .3dsx biasa (`make`) tidak butuh ini sama sekali.
 #---------------------------------------------------------------------------------
 APP_PRODUCT_CODE	?=	CTR-P-TRPG
 APP_UNIQUE_ID		?=	0xF6DC1
@@ -262,3 +265,4 @@ $(OUTPUT).elf	:	$(OFILES)
 #---------------------------------------------------------------------------------------
 endif
 #---------------------------------------------------------------------------------------
+endif # host tests / 3DS build

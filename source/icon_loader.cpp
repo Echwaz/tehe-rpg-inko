@@ -1,4 +1,5 @@
 #include "icon_loader.h"
+#include <cstdio>
 
 #include "third_party/lodepng.h"
 
@@ -28,13 +29,28 @@ void resizeNearest(const std::vector<uint8_t>& src, unsigned sw, unsigned sh,
 
 bool loadResized(const std::string& path, int canvasSize, std::vector<uint8_t>& outRgba) {
     outRgba.clear();
-    if (canvasSize <= 0) return false;
+    if (canvasSize <= 0 || static_cast<unsigned>(canvasSize) > kMaxSourceDimension) return false;
+
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    if (std::fseek(f, 0, SEEK_END) != 0) { std::fclose(f); return false; }
+    const long bytes = std::ftell(f);
+    if (bytes < 33 || static_cast<unsigned long>(bytes) > kMaxFileBytes ||
+        std::fseek(f, 0, SEEK_SET) != 0) { std::fclose(f); return false; }
+    std::vector<unsigned char> encoded(static_cast<std::size_t>(bytes));
+    const bool readOk = std::fread(encoded.data(), 1, encoded.size(), f) == encoded.size();
+    std::fclose(f);
+    if (!readOk) return false;
 
     std::vector<uint8_t> raw;
     unsigned w = 0, h = 0;
-    // lodepng::decode baca dari path lewat stdio biasa: jalan untuk "sdmc:/..."
-    // (kartu SD) di 3DS maupun path biasa saat dites di PC.
-    const unsigned err = lodepng::decode(raw, w, h, path);
+    lodepng::State header;
+    if (lodepng_inspect(&w, &h, &header, encoded.data(), encoded.size()) != 0 ||
+        w == 0 || h == 0 || w > kMaxSourceDimension || h > kMaxSourceDimension) return false;
+    lodepng::State decoder;
+    decoder.decoder.read_text_chunks = 0;
+    decoder.decoder.max_icc_size = 4096;
+    const unsigned err = lodepng::decode(raw, w, h, decoder, encoded);
     if (err != 0 || w == 0 || h == 0) return false;   // berkas tidak ada / bukan PNG valid
 
     resizeNearest(raw, w, h, canvasSize, outRgba);

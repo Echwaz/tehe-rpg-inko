@@ -1,0 +1,33 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host dependencies
+        run: sudo apt-get update && sudo apt-get install -y g++ make libvorbisidec-dev libogg-dev
+      - name: Run regression tests
+        run: make test
+
+  build-3ds:
+    runs-on: ubuntu-24.04
+    container: devkitpro/devkitarm@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build homebrew
+        run: make -j2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tehe-RPG-inko-3dsx
+          path: |
+            Tehe-RPG-inko.3dsx
+            Tehe-RPG-inko.smdh
+          if-no-files-found: error

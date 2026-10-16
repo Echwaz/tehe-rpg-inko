@@ -1149,10 +1149,12 @@ static void testFinalDeathCutscene() {
         if (e.kind == FxKind::Damage) ++damageEvents;
     }
     assert(damageEvents == 3 && last > 0);
-    assert(b.defeatFrame() == -(last + 60));
+    assert(events.back().kind == FxKind::Damage && events.back().finisher);
+    const int tail = hit_presentation::FinishRecovery;
+    assert(b.defeatFrame() == -(last + tail + 60));
     const int sp = b.party().front[0].sp, hp = b.party().front[0].hp, round = b.round();
     const std::string frontName = b.party().front[0].name;
-    for (int i = 0; i < last + 60; ++i) {
+    for (int i = 0; i < last + tail + 60; ++i) {
         assert(b.defeatFrame() < 0);
         b.update();
     }

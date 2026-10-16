@@ -5,10 +5,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <set>
-
-#if !defined(_WIN32)
 #include <sys/stat.h>
+
+#if defined(_WIN32)
+#include <direct.h>
 #endif
 
 namespace party_config {
@@ -220,14 +222,31 @@ void applyKey(CharCfg& c, const std::string& key, const std::string& val) {
     }
 }
 
-void ensureParentDir(const std::string& path) {
-#if !defined(_WIN32)
-    const size_t p = path.find_last_of('/');
-    if (p == std::string::npos || p == 0) return;
-    mkdir(path.substr(0, p).c_str(), 0777);   // gagal (sudah ada) tidak masalah
+bool ensureParentDir(const std::string& path) {
+    const size_t end = path.find_last_of("/\\");
+    if (end == std::string::npos) return true;
+    for (size_t p = 1; p <= end; ++p) {
+        if (path[p] != '/' && path[p] != '\\') continue;
+        const std::string dir = path.substr(0, p);
+        if (dir.back() == ':') continue; // sdmc:/ dan drive Windows
+#if defined(_WIN32)
+        const int rc = _mkdir(dir.c_str());
 #else
-    (void)path;
+        const int rc = mkdir(dir.c_str(), 0777);
 #endif
+        if (rc != 0) {
+            struct stat st;
+            if (errno != EEXIST || stat(dir.c_str(), &st) != 0 || !(st.st_mode & S_IFDIR))
+                return false;
+        }
+    }
+    return true;
+}
+
+bool regularOrMissing(const std::string& path, bool& exists) {
+    struct stat st;
+    exists = stat(path.c_str(), &st) == 0;
+    return exists ? (st.st_mode & S_IFMT) == S_IFREG : errno == ENOENT;
 }
 
 }  // namespace
@@ -321,6 +340,7 @@ Party buildParty(const PartyConfig& in) {
 bool load(const std::string& path, PartyConfig& cfg) {
     cfg = defaults();
     std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) f = std::fopen((path + ".bak").c_str(), "rb");
     if (!f) return false;
 
     std::string data;
@@ -356,8 +376,11 @@ bool load(const std::string& path, PartyConfig& cfg) {
 bool save(const std::string& path, const PartyConfig& in) {
     PartyConfig cfg = in;
     sanitize(cfg);
-    ensureParentDir(path);
-    std::FILE* f = std::fopen(path.c_str(), "wb");
+    if (!ensureParentDir(path)) return false;
+    bool exists = false, backupExists = false;
+    const std::string temp = path + ".tmp", backup = path + ".bak";
+    if (!regularOrMissing(path, exists) || !regularOrMissing(backup, backupExists)) return false;
+    std::FILE* f = std::fopen(temp.c_str(), "wb");
     if (!f) return false;
 
     std::fprintf(f, "# Tehe-RPG-inko: custom party\n");
@@ -384,8 +407,26 @@ bool save(const std::string& path, const PartyConfig& in) {
         }
         std::fprintf(f, "\n");
     }
-    const bool ok = std::ferror(f) == 0;
-    return std::fclose(f) == 0 && ok;
+    bool ok = std::ferror(f) == 0;
+    if (std::fflush(f) != 0) ok = false;
+    if (std::fclose(f) != 0) ok = false;
+    if (!ok) { std::remove(temp.c_str()); return false; }
+
+    // FAT tidak menjamin rename menimpa tujuan yang ada. Simpan versi lama dahulu;
+    // load() memakai .bak bila proses terhenti sebelum file baru terpasang.
+    if (exists) {
+        if ((backupExists && std::remove(backup.c_str()) != 0) ||
+            std::rename(path.c_str(), backup.c_str()) != 0) {
+            std::remove(temp.c_str());
+            return false;
+        }
+    }
+    if (std::rename(temp.c_str(), path.c_str()) != 0) {
+        if (exists) std::rename(backup.c_str(), path.c_str());
+        std::remove(temp.c_str());
+        return false;
+    }
+    return true;
 }
 
 void resetAll(PartyConfig& cfg) { cfg = defaults(); }

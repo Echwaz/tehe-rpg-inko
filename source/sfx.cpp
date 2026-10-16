@@ -3,6 +3,7 @@
 #include <3ds.h>
 
 #include <cstddef>
+#include <algorithm>
 #include <cstring>
 
 #include "bgm_decoder.h"
@@ -91,7 +92,7 @@ void shutdown() {
     g_ready = false;
 }
 
-void play(Id id) {
+void play(Id id, float pitch, float gain) {
     if (!g_ready) return;
     const Clip& c = g_clips[static_cast<int>(id)];
     if (!c.loaded) return;
@@ -107,12 +108,12 @@ void play(Id id) {
 
     ndspChnReset(ch);
     ndspChnSetInterp(ch, NDSP_INTERP_LINEAR);
-    ndspChnSetRate(ch, static_cast<float>(c.rate));
+    ndspChnSetRate(ch, static_cast<float>(c.rate) * std::max(0.5f, std::min(2.f, pitch)));
     ndspChnSetFormat(ch, c.channels == 2 ? NDSP_FORMAT_STEREO_PCM16 : NDSP_FORMAT_MONO_PCM16);
     float mix[12];
     std::memset(mix, 0, sizeof mix);
-    mix[0] = kVolume;
-    mix[1] = kVolume;
+    mix[0] = kVolume * std::max(0.f, std::min(1.f, gain));
+    mix[1] = mix[0];
     ndspChnSetMix(ch, mix);
 
     ndspWaveBuf& wb = g_wb[ch - kFirstChannel];

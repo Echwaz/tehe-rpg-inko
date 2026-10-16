@@ -55,8 +55,8 @@ int main(int /*argc*/, char** /*argv*/) {
         const u32 kDown = hidKeysDown();
         if (kDown & KEY_START) {
             // Jangan buang hasil edit kalau app ditutup di tengah layar Customize.
-            if (state == GameState::Customize) party_config::save(kPartyPath, customize.config());
-            break;
+            if (state != GameState::Customize || party_config::save(kPartyPath, customize.config())) break;
+            customize.saveFailed();
         }
         touch.update();
         const u32 kHeld = hidKeysHeld();
@@ -78,9 +78,12 @@ int main(int /*argc*/, char** /*argv*/) {
         case GameState::Customize:
             customize.update(touch, kDown);
             if (customize.wantsExit()) {
-                partyCfg = customize.config();
-                party_config::save(kPartyPath, partyCfg);   // gagal simpan (SD terkunci) tidak fatal
-                state = GameState::Dialogue;
+                if (party_config::save(kPartyPath, customize.config())) {
+                    partyCfg = customize.config();
+                    state = GameState::Dialogue;
+                } else {
+                    customize.saveFailed();
+                }
             }
             break;
         case GameState::Battle:

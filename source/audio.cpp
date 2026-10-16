@@ -3,6 +3,7 @@
 #include <3ds.h>
 
 #include <cstring>
+#include <atomic>
 
 #include "bgm_decoder.h"
 
@@ -27,7 +28,7 @@ const size_t kStackBytes   = 64 * 1024;
 
 enum class Fade { None, In, Out };
 
-// Data thread audio (hanya disentuh thread audio, kecuali yang bertanda volatile)
+// Data milik thread audio; permintaan dari thread utama memakai atomic.
 LoopingOgg     g_dec;
 ndspWaveBuf    g_wb[kNumBufs];
 s16*           g_pcm[kNumBufs] = {};
@@ -38,8 +39,8 @@ u64            g_fadeAt   = 0;
 float          g_gain     = -1.f;          // volume yang terakhir dikirim ke NDSP
 
 // Dibagi antar thread
-volatile int   g_req  = 0;
-volatile bool  g_quit = false;
+std::atomic<int>  g_req{0};
+std::atomic<bool> g_quit{false};
 LightEvent     g_event;
 Thread         g_thread = nullptr;
 bool           g_ready  = false;           // ndspInit sudah berhasil dan belum di-shutdown
@@ -85,7 +86,7 @@ bool startTrack(Track t, u64 now) {
 
 // Fade dan pergantian lagu. Dipanggil tiap putaran thread audio.
 void tick() {
-    const Track want = static_cast<Track>(g_req);
+    const Track want = static_cast<Track>(g_req.load());
     const u64   now  = osGetTime();
 
     if (g_dec.isOpen() && g_fade == Fade::Out) {

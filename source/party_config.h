@@ -84,7 +84,9 @@ Party buildParty(const PartyConfig& cfg);
 // Berkas teks sederhana bergaya INI. load(): kalau berkas tidak ada atau tidak terbaca,
 // cfg diisi defaults() dan hasilnya false. Baris yang tidak dikenal atau bernilai rusak
 // diabaikan, jadi berkas hasil edit tangan tidak pernah membuat game crash. Hasil load
-// selalu sudah disanitasi. save(): membuat folder induk (satu tingkat) bila belum ada.
+// selalu sudah disanitasi. Jika berkas utama tidak terbaca, load() mencoba .bak.
+// save(): membuat folder induk bertingkat, menulis .tmp lalu mengganti berkas utama,
+// menyimpan versi sebelumnya di .bak. false berarti perubahan belum tersimpan.
 bool load(const std::string& path, PartyConfig& cfg);
 bool save(const std::string& path, const PartyConfig& cfg);
 

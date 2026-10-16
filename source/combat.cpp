@@ -346,9 +346,14 @@ bool Battle::activateOverdrive() {
 }
 
 void Battle::recordHits(const AttackSummary& a, bool onEnemy, int slot, int baseDelay,
-                         int attackerSlot) {
+                         int attackerSlot, hit_presentation::Style style, int plannedHits) {
+    if (!onEnemy) style = hit_presentation::Style::Regular;
+    if (plannedHits <= 0) plannedHits = static_cast<int>(a.hit_list.size());
     int delay = baseDelay;
-    for (const HitResult& h : a.hit_list) {
+    for (std::size_t i = 0; i < a.hit_list.size(); ++i) {
+        const HitResult& h = a.hit_list[i];
+        delay = baseDelay + hit_presentation::delay(style, static_cast<int>(i), plannedHits);
+        const bool finisher = style != hit_presentation::Style::Regular && i + 1 == a.hit_list.size();
         if (h.dp_lost > 0 || h.hp_lost > 0) {
             FxEvent e;
             e.kind = FxKind::Damage;
@@ -358,24 +363,30 @@ void Battle::recordHits(const AttackSummary& a, bool onEnemy, int slot, int base
             e.hp = h.hp_lost;
             e.delay = delay;
             e.attacker_slot = attackerSlot;
+            e.style = style;
+            e.hit_index = static_cast<int>(i);
+            e.finisher = finisher;
+            e.breaks_target = h.just_broken;
             fx_.push_back(e);
-            fxSpan_ = std::max(fxSpan_, e.delay);
+            fxSpan_ = std::max(fxSpan_, e.delay + (finisher ? hit_presentation::FinishRecovery : 0));
         }
         if (h.just_broken) {
             FxEvent b;
             b.kind = FxKind::Break;
             b.on_enemy = onEnemy;
             b.slot = slot;
-            b.delay = delay + 2;
+            b.delay = delay + (finisher ? 0 : 2);
+            b.style = style;
+            b.hit_index = static_cast<int>(i);
+            b.finisher = finisher;
             fx_.push_back(b);
             fxSpan_ = std::max(fxSpan_, b.delay);
         }
-        delay += kFxHitGap;
     }
 
     // Stun dari skill (break sudah punya event Break sendiri). Muncul sesaat setelah hit terakhir.
     if (onEnemy && a.stunned) {
-        const int lastHit = a.hit_list.empty() ? baseDelay : delay - kFxHitGap;
+        const int lastHit = a.hit_list.empty() ? baseDelay : delay;
         FxEvent s;
         s.kind = FxKind::Stun;
         s.on_enemy = true;
@@ -580,7 +591,7 @@ void Battle::runPlayerAction(int slot) {
         Skill atk = s;
         if (odActive_) atk.power = atk.power * odMultPct_ / 100;
         const AttackSummary a = performAttack(atk, c, enemy_);
-        recordHits(a, true, 0, 0, slot);
+        recordHits(a, true, 0, 0, slot, hit_presentation::select(c.key, usedIdx), atk.hits);
         gainOdGauge(a.hits);                          // gauge terus terisi, aktif atau tidak
         if (usedIdx >= 0) consumeOneTimeBuffs(c);     // AtkUp/DevUp hanya habis oleh skill, bukan attack biasa
         report(c.name, s.name, s.is_basic, a);

@@ -4,6 +4,7 @@
 #include "assets.h"
 #include "battle3d.h"
 #include "screens.h"
+#include "page_navigation.h"
 
 namespace {
 
@@ -156,8 +157,8 @@ void DialogueScreen::update(const TouchState& touch, u32 keysDown) {
     } else {
         const bool up   = (keysDown & (KEY_DUP   | KEY_CPAD_UP))   != 0;
         const bool downK = (keysDown & (KEY_DDOWN | KEY_CPAD_DOWN)) != 0;
-        if (up && logTop_ > 0) --logTop_;
-        if (downK) ++logTop_;
+        if (up) logTop_ = page_navigation::move(logTop_, scene_.historyCount(), kLogSlots, -1);
+        if (downK) logTop_ = page_navigation::move(logTop_, scene_.historyCount(), kLogSlots, 1);
         if (keysDown & (KEY_B | KEY_A)) mode_ = Mode::Normal;
     }
 
@@ -166,8 +167,8 @@ void DialogueScreen::update(const TouchState& touch, u32 keysDown) {
     case BtnHide:     windowHidden_ = !windowHidden_; break;
     case BtnSkip:     scene_.skipAll(); break;
     case BtnTapArea:  advance(); break;
-    case BtnLogUp:    if (logTop_ > 0) --logTop_; break;
-    case BtnLogDown:  ++logTop_; break;
+    case BtnLogUp:    logTop_ = page_navigation::move(logTop_, scene_.historyCount(), kLogSlots, -1); break;
+    case BtnLogDown:  logTop_ = page_navigation::move(logTop_, scene_.historyCount(), kLogSlots, 1); break;
     case BtnLogClose: mode_ = Mode::Normal; break;
     default: break;
     }

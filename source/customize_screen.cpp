@@ -170,12 +170,14 @@ void CustomizeScreen::enter(const PartyConfig& cfg) {
     confirmReset_ = false;
     frame_ = 0;
     toast_.clear();
+    saveError_ = false;
     toastFrame_ = -1000;
     buttons_.reset();
     buildButtons();
 }
 
 void CustomizeScreen::say(const char* msg) {
+    saveError_ = false;
     toast_ = msg;
     toastFrame_ = frame_;
 }
@@ -300,6 +302,12 @@ void CustomizeScreen::handle(int id) {
     }
 }
 
+void CustomizeScreen::saveFailed() {
+    exit_ = false;
+    say("Save failed. Check SD card, then try Done or START.");
+    saveError_ = true;
+}
+
 void CustomizeScreen::update(const TouchState& touch, u32 keysDown) {
     ++frame_;
     buildButtons();
@@ -337,8 +345,8 @@ void CustomizeScreen::drawTop(TextRenderer& text) const {
         }
     }
 
-    if (frame_ - toastFrame_ < kToastFrames && !toast_.empty()) {
-        text.drawCentered(toast_.c_str(), 200, 231, 0.42f, colors::pinkLight);
+    if ((saveError_ || frame_ - toastFrame_ < kToastFrames) && !toast_.empty()) {
+        text.drawCentered(toast_.c_str(), 200, 231, fitScale(text, toast_, 0.42f, 384.f), colors::pinkLight);
     } else {
         const char* hint = page_ == Page::Roster ? "Tap a character to edit. Done saves your party."
                          : page_ == Page::Character ? "Tap a skill to edit it, or Rename the character."

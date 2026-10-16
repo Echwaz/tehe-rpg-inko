@@ -4,7 +4,7 @@ BasicInfo:
   Logo                    : Homebrew   # logo bebas-hak-cipta bawaan makerom (bukan logo Nintendo asli)
 
 RomFs:
-  RootPath                : romfs      # sama seperti build .3dsx: lagu (.ogg) ikut tertanam
+  RootPath                : romfs      # SFX bawaan; BGM tetap dibaca dari kartu SD
 
 TitleInfo:
   Category                : Application

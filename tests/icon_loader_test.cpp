@@ -103,9 +103,31 @@ void testGpuColorsAndAlpha() {
     std::remove(path.c_str());
 }
 
+void testDecodeLimits() {
+    const std::string path = tempPngPath("tehe_rpg_inko_test_icon_limits.png");
+    std::vector<uint8_t> out(4, 255);
+    writeQuadPng(path, icon_loader::kMaxSourceDimension + 1, 1);
+    assert(!icon_loader::loadResized(path, 128, out) && out.empty());
+    writeQuadPng(path, 1, icon_loader::kMaxSourceDimension + 1);
+    assert(!icon_loader::loadResized(path, 128, out) && out.empty());
+    writeQuadPng(path, icon_loader::kMaxSourceDimension, icon_loader::kMaxSourceDimension);
+    assert(icon_loader::loadResized(path, 128, out));
+    assert(!icon_loader::loadResized(path, 0, out) && out.empty());
+    assert(!icon_loader::loadResized(path, 513, out) && out.empty());
+
+    std::FILE* f = std::fopen(path.c_str(), "wb");
+    assert(f);
+    assert(std::fseek(f, static_cast<long>(icon_loader::kMaxFileBytes), SEEK_SET) == 0);
+    assert(std::fputc(0, f) != EOF);
+    assert(std::fclose(f) == 0);
+    assert(!icon_loader::loadResized(path, 128, out) && out.empty());
+    std::remove(path.c_str());
+}
+
 }  // namespace
 
 int main() {
+    testDecodeLimits();
     testGpuColorsAndAlpha();
     testMissingFileFails();
     testResizeUpAndDown();

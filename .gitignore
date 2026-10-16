@@ -6,5 +6,6 @@
 *.map
 
 build/
+build-tests*/
 meta/banner.bnr
 meta/icon.icn

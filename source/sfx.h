@@ -25,6 +25,6 @@ enum class Id {
 
 bool init(bool dspReady);   // panggil setelah audio::init(); dspReady = hasil kembalian audio::init()
 void shutdown();
-void play(Id id);           // tanpa efek kalau mode senyap atau berkas sfx ini tidak ada
+void play(Id id, float pitch = 1.f, float gain = 1.f);
 
 }  // namespace sfx

@@ -1,6 +1,7 @@
 #pragma once
 #include "defeat_cutscene.h"
 #include "awakening.h"
+#include "hit_presentation.h"
 // Logika pertempuran turn-based (tanpa dependensi 3DS).
 //
 // Aturan yang diadopsi:
@@ -240,8 +241,12 @@ struct FxEvent {
     int    delay    = 0;       // frame sejak aksi dijalankan sampai efek ini tampil
     int    attacker_slot = -1; // slot party (0..2) penyerang; hanya diisi saat on_enemy true,
                                 // dipakai tampilan untuk membedakan gaya hit senjata jarak dekat/jauh
+    hit_presentation::Style style = hit_presentation::Style::Regular;
+    int hit_index = 0;
+    bool finisher = false;
+    bool breaks_target = false;
 };
-constexpr int kFxHitGap = 9;   // jeda antar hit beruntun dalam satu skill (frame)
+constexpr int kFxHitGap = hit_presentation::HitGap;
 
 // Menjalankan seluruh hit sebuah skill serangan ke satu target, termasuk
 // devastation rate dan stun jika target adalah musuh.
@@ -354,7 +359,9 @@ private:
     void report(const std::string& who, const std::string& what, bool isBasic,
                 const AttackSummary& a);
     void recordHits(const AttackSummary& a, bool onEnemy, int slot, int baseDelay,
-                     int attackerSlot = -1);
+                     int attackerSlot = -1,
+                     hit_presentation::Style style = hit_presentation::Style::Regular,
+                     int plannedHits = 0);
 
     Party       partyOverride_;
     bool        hasPartyOverride_ = false;

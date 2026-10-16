@@ -7,12 +7,14 @@
 #include <vector>
 
 namespace icon_loader {
+constexpr unsigned kMaxSourceDimension = 512;
+constexpr std::size_t kMaxFileBytes = 2 * 1024 * 1024;
 
 // Memuat PNG dari 'path' (mis. "sdmc:/3ds/Tehe-RPG-inko/assets/ruka_icon.png") lalu mengubah
 // ukurannya (nearest-neighbor) menjadi persegi 'canvasSize' x 'canvasSize', RGBA8 dari baris atas,
-// urutan byte R,G,B,A. PNG apa pun yang valid diskalakan paksa ke kotak tersebut.
+// urutan byte R,G,B,A. Dimensi sumber/canvas dibatasi 512 dan berkas maksimal 2 MiB.
 // Mengembalikan false (dan mengosongkan outRgba) bila berkas tidak ada, bukan PNG valid, atau
-// berukuran 0; pemanggil jatuh ke ikon cadangan.
+// berukuran 0 atau melampaui batas; pemanggil jatuh ke ikon cadangan.
 bool loadResized(const std::string& path, int canvasSize, std::vector<uint8_t>& outRgba);
 
 // Menyalin pixelCount piksel RGBA ke buffer terpisah (minimal pixelCount * 4 byte). GPU_RGBA8 dan

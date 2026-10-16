@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "../source/party_config.h"
 
@@ -512,7 +514,45 @@ static void testBonusSaveLoad() {
     std::remove(path.c_str());
 }
 
+static void testSaveRecoveryAndFailures() {
+    const std::string root = "/tmp/tehe_save_regression_" + std::to_string(getpid());
+    const std::string path = root + "/nested/party.cfg";
+    PartyConfig old = defaults(), edited = old, read;
+    edited.chars[kRuka].name = "Edited";
+    assert(save(path, old)); // kedua folder induk belum ada
+    assert(save(path, edited));
+    assert(load(path, read) && read.chars[kRuka] == edited.chars[kRuka]);
+    assert(load(path + ".bak", read) && read.chars[kRuka] == old.chars[kRuka]);
+
+    assert(std::remove(path.c_str()) == 0); // interupsi setelah versi lama dipindah
+    assert(load(path, read) && read.chars[kRuka] == old.chars[kRuka]);
+    assert(save(path, edited));
+
+    assert(mkdir((path + ".tmp").c_str(), 0700) == 0);
+    assert(!save(path, old));
+    assert(load(path, read) && read.chars[kRuka] == edited.chars[kRuka]);
+    assert(rmdir((path + ".tmp").c_str()) == 0);
+
+    // Galat penulisan saat flush harus tetap mempertahankan file utama dan cadangan.
+    assert(symlink("/dev/full", (path + ".tmp").c_str()) == 0);
+    assert(!save(path, old));
+    assert(load(path, read) && read.chars[kRuka] == edited.chars[kRuka]);
+    assert(load(path + ".bak", read) && read.chars[kRuka] == old.chars[kRuka]);
+
+    assert(std::remove((path + ".bak").c_str()) == 0);
+    assert(mkdir((path + ".bak").c_str(), 0700) == 0);
+    assert(!save(path, old));
+    assert(load(path, read) && read.chars[kRuka] == edited.chars[kRuka]);
+    assert(rmdir((path + ".bak").c_str()) == 0);
+    assert(!save(path + "/child.cfg", old)); // induk berupa file, bukan folder
+    assert(load(path, read) && read.chars[kRuka] == edited.chars[kRuka]);
+    assert(std::remove(path.c_str()) == 0);
+    assert(rmdir((root + "/nested").c_str()) == 0);
+    assert(rmdir(root.c_str()) == 0);
+}
+
 int main() {
+    testSaveRecoveryAndFailures();
     testRoleStepAndSanitize();
     testRoleIsOnlyALabel();
     testSkillBonusPerSkill();
