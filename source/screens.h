@@ -76,7 +76,7 @@ public:
     void setPartyConfig(const party_config::PartyConfig& cfg) {
         battle_.setPartyOverride(party_config::buildParty(cfg));
     }
-    void enter();
+    void enter(bool nextEncounter = false);
     void update(const TouchState& touch, u32 keysDown, u32 keysHeld);
     bool drawScene3d(C3D_RenderTarget* target) const;
     void drawTop(TextRenderer& text, bool scene3d = false) const;

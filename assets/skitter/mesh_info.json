@@ -1,0 +1,34 @@
+{
+  "road": {
+    "vertices": 4,
+    "triangles": 2
+  },
+  "sidewalk": {
+    "vertices": 48,
+    "triangles": 24
+  },
+  "details": {
+    "vertices": 1720,
+    "triangles": 2520
+  },
+  "buildings": {
+    "vertices": 144,
+    "triangles": 72
+  },
+  "sky": {
+    "vertices": 4,
+    "triangles": 2
+  },
+  "idle": {
+    "vertices": 746,
+    "triangles": 524
+  },
+  "break": {
+    "vertices": 746,
+    "triangles": 524
+  },
+  "down": {
+    "vertices": 746,
+    "triangles": 524
+  }
+}

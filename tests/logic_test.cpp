@@ -1204,7 +1204,63 @@ static void testDefeatSoundCues() {
     assert(soundCues(Duration, -1) == 0); // restart reset is silent
 }
 
+static void testSkitterEncounter() {
+    Battle b;
+    b.start(EnemyKind::Skitter);
+    assert(b.enemy().name == "Skitter" && !b.awakened());
+    assert(b.enemy().max_dp == 45 && b.enemy().max_hp == 180);
+    bool targets[3] = {false, false, false};
+    std::srand(17);
+    for (int turn = 1; turn <= 30; ++turn) {
+        b.round_ = turn;
+        for (auto& c : b.party_.front) { c.dp = 10000; c.hp = 10000; }
+        b.enemyAct();
+        auto events = b.takeFx();
+        assert(events.size() == 1 && !events[0].on_enemy);
+        assert(events[0].dp == 12 && events[0].hp == 0);
+        targets[events[0].slot] = true;
+        for (auto& c : b.party_.back) assert(c.dp == c.max_dp);
+    }
+    assert(targets[0] && targets[1] && targets[2]);
+    b.start(EnemyKind::Skitter);
+    b.enemy_.dp = 1;
+    b.party_.front[0].atk = 1;
+    b.execute();
+    runUntil(b, BattlePhase::Planning);
+    assert(b.enemy().broken && b.enemy().stunned && b.enemy().dp == 0);
+    b.enemy_.hp = 1;
+    b.odGauge_ = kOdHitsPerBar + 3;
+    b.odBarsReady_ = 1;
+    assert(b.activateOverdrive());
+    b.execute();
+    runUntil(b, BattlePhase::Dying);
+    assert(!b.awakened() && !b.odActive() && b.defeatFrame() == -1);
+    for (int n = 0; n < 10000 && b.phase() != BattlePhase::Victory; ++n) {
+        b.update();
+        assert(b.phase() != BattlePhase::Awakening);
+    }
+    assert(b.phase() == BattlePhase::Victory && b.defeatFrame() == -1);
+    const Party carried = b.party();
+    const int gauge = b.odGauge();
+    b.start(EnemyKind::Hellspider, true);
+    assert(b.enemy().name == "Hellspider" && !b.awakened());
+    assert(b.phase() == BattlePhase::Planning && b.round() == 1);
+    assert(!b.odActive() && b.odTurnsRemaining() == 0 && b.odLevel() == 0);
+    assert(b.odGauge() == gauge && b.odBarsReady() == gauge / kOdHitsPerBar);
+    assert(b.takeFx().empty());
+    for (int i = 0; i < 3; ++i) {
+        assert(b.party().front[i].sp == carried.front[i].sp);
+        assert(b.party().back[i].sp == carried.back[i].sp);
+        assert(b.party().front[i].dp == carried.front[i].dp);
+        assert(b.party().front[i].hp == carried.front[i].hp);
+    }
+    b.start(EnemyKind::Skitter);
+    assert(b.odGauge() == 0 && b.party().front[0].sp == kStartSP);
+    std::puts("Skitter: random single hits, Break, one-phase victory, resource carry and restart OK");
+}
+
 int main() {
+    testSkitterEncounter();
     testDefeatSoundCues();
     testFinalDeathCutscene();
     validateTreeMesh(white_tree::light_vertices, white_tree::light_indices);

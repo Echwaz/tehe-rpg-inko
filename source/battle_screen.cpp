@@ -561,8 +561,8 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
 }
 
 
-void BattleScreen::enter() {
-    battle_.start();
+void BattleScreen::enter(bool nextEncounter) {
+    battle_.start(nextEncounter ? EnemyKind::Hellspider : EnemyKind::Skitter, nextEncounter);
     buttons_.reset();
     menu_ = Menu::Plan;
     slot_ = 0;
@@ -590,7 +590,7 @@ void BattleScreen::enter() {
     }
     enemyDpAnim_.snap(battle_.enemy().dp);
     enemyHpAnim_.snap(battle_.enemy().hp);
-    odAnim_.snap(0);
+    odAnim_.snap(odBarProgress(battle_));
 
     buildButtons();
 }
@@ -632,7 +632,8 @@ void BattleScreen::buildButtons() {
         break;
     case BattlePhase::Victory:
     case BattlePhase::Defeat:
-        buttons_.add(BtnRestart, 16, 110, 288, 56, "Play Again", true, colors::pink, 0.65f);
+        buttons_.add(BtnRestart, 16, 110, 288, 56, battle_.phase() == BattlePhase::Victory && battle_.enemyKind() == EnemyKind::Skitter
+                      ? "Continue to Hellspider" : "Play Again", true, colors::pink, 0.65f);
         break;
     case BattlePhase::Executing:
     case BattlePhase::EnemyTurn:
@@ -662,7 +663,9 @@ void BattleScreen::handle(int id) {
     } else if (id == BtnOverdrive) {
         if (battle_.activateOverdrive()) sfx::play(sfx::Id::Overdrive);
     } else if (id == BtnRestart) {
-        restart_ = true;
+        if (battle_.phase() == BattlePhase::Victory && battle_.enemyKind() == EnemyKind::Skitter)
+            enter(true);
+        else restart_ = true;
     }
 }
 
@@ -957,6 +960,7 @@ void BattleScreen::updateButtonsInput(u32 keysDown, u32 keysHeld) {
 bool BattleScreen::drawScene3d(C3D_RenderTarget* target) const {
     battle3d::SceneState state;
     state.frame = frame_;
+    state.skitter = battle_.enemyKind() == EnemyKind::Skitter;
     state.awakeningFrame = battle_.awakeningFrame();
     state.defeatFrame = battle_.defeatFrame();
     state.awakened = battle_.awakened();
@@ -964,7 +968,8 @@ bool BattleScreen::drawScene3d(C3D_RenderTarget* target) const {
     state.stunned = bossStunned_;
     state.defeated = battle_.enemy().hp <= 0;
     // Tahan pose sebelum cutscene sampai angka damage terakhir selesai memudar.
-    if (battle_.phase() == BattlePhase::Awakening || battle_.phase() == BattlePhase::Dying)
+    if (battle_.phase() == BattlePhase::Awakening ||
+        (battle_.phase() == BattlePhase::Dying && !state.skitter))
         state.defeated = false;
     for (const FxItem& item : fx_) {
         const int age = frame_ - item.start;

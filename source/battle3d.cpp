@@ -10,11 +10,16 @@
 #include <cstring>
 #include "mesh_arena_data.h"
 #include "mesh_slug_data.h"
+#include "mesh_skitter_data.h"
 #include "mesh_slug_awaken_data.h"
 #include "battle3d_shbin.h"
 
 extern "C" {
 #define TEXTURE_SYMBOL(name) extern const u8 name##_t3x[]; extern const u8 name##_t3x_end[];
+TEXTURE_SYMBOL(skitter_diffuse)
+TEXTURE_SYMBOL(skitter_break_emissive)
+TEXTURE_SYMBOL(skitter_palette)
+TEXTURE_SYMBOL(skitter_asphalt)
 TEXTURE_SYMBOL(arena_ground_diffuse)
 TEXTURE_SYMBOL(arena_ground_emissive)
 TEXTURE_SYMBOL(arena_buildings_diffuse)
@@ -39,8 +44,8 @@ struct Mesh {
     int count = 0;
     C3D_BufInfo buffers;
 };
-enum { Ground, Buildings, Rubble, Backdrop, Slug, SlugAwaken, TreeLight, TreeShade, TreeHoles, MeshCount };
-enum { GroundD, GroundE, BuildingsD, BuildingsE, RubbleD, RubbleE, BackdropD, SlugD, SlugE, SlugBreakE, TexCount };
+enum { Ground, Buildings, Rubble, Backdrop, Slug, SlugAwaken, TreeLight, TreeShade, TreeHoles, SkitterRoad, SkitterSidewalk, SkitterDetails, SkitterBuildings, SkitterSky, SkitterIdle, SkitterBreak, SkitterDown, MeshCount };
+enum { GroundD, GroundE, BuildingsD, BuildingsE, RubbleD, RubbleE, BackdropD, SlugD, SlugE, SlugBreakE, SkitterPalette, SkitterAsphalt, SkitterDiffuse, SkitterBreakE, TexCount };
 Mesh meshes[MeshCount];
 C3D_Tex textures[TexCount] = {};
 bool loaded[TexCount] = {};
@@ -56,6 +61,7 @@ constexpr float kEnemyYawDegrees = -20.f;
 ArenaCache arenaCache;
 cinematic_view::Shot cachedShot = cinematic_view::Shot::Moving;
 bool old3dsCinematics = true;
+bool cachedSkitter = false;
 
 // Kalau init gagal, layar atas dikosongkan dan HUD tetap bisa dipakai.
 bool fail() {
@@ -144,13 +150,13 @@ void draw(int id) {
     C3D_DrawElements(GPU_TRIANGLES, meshes[id].count, C3D_UNSIGNED_SHORT, meshes[id].indices);
 }
 
-void setMatrix(const C3D_Mtx& projection, const C3D_Mtx& view, const C3D_Mtx& model, bool enemy) {
+void setMatrix(const C3D_Mtx& projection, const C3D_Mtx& view, const C3D_Mtx& model, bool enemy, float anchorHeight = 2.2f) {
     C3D_Mtx modelView, mvp;
     Mtx_Multiply(&modelView, &view, &model);
     Mtx_Multiply(&mvp, &projection, &modelView);
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, mvpLocation, &mvp);
     if (enemy) {
-        const C3D_FVec p = Mtx_MultiplyFVec4(&mvp, FVec4_New(0.f, 2.2f, 0.2f, 1.f));
+        const C3D_FVec p = Mtx_MultiplyFVec4(&mvp, FVec4_New(0.f, anchorHeight, 0.2f, 1.f));
         if (p.w > 0.001f) {
             // Batalkan putaran seperempat di Mtx_PerspTilt untuk HUD tegak 400x240.
             anchorX = std::max(20.f, std::min(380.f, (1.f - p.y / p.w) * 200.f));
@@ -180,6 +186,16 @@ bool init() {
         !upload(meshes[Slug], battle3d_slug_verts, battle3d_slug_indices) ||
         !upload(meshes[SlugAwaken], battle3d_slug_awaken_verts, battle3d_slug_indices)) return fail();
 
+    using namespace skitter_mesh;
+    if (!upload(meshes[SkitterRoad], road_verts, road_indices) ||
+        !upload(meshes[SkitterSidewalk], sidewalk_verts, sidewalk_indices) ||
+        !upload(meshes[SkitterDetails], details_verts, details_indices) ||
+        !upload(meshes[SkitterBuildings], buildings_verts, buildings_indices) ||
+        !upload(meshes[SkitterSky], sky_verts, sky_indices) ||
+        !upload(meshes[SkitterIdle], idle_verts, idle_indices) ||
+        !upload(meshes[SkitterBreak], break_verts, break_indices) ||
+        !upload(meshes[SkitterDown], down_verts, down_indices)) return fail();
+
 #define LOAD(id, name, wrap) if (!loadTexture(id, name##_t3x, name##_t3x_end, wrap)) return fail()
     LOAD(GroundD, arena_ground_diffuse, GPU_REPEAT);
     LOAD(GroundE, arena_ground_emissive, GPU_REPEAT);
@@ -191,6 +207,11 @@ bool init() {
     LOAD(SlugD, death_slug_diffuse, GPU_CLAMP_TO_EDGE);
     LOAD(SlugE, death_slug_emissive, GPU_CLAMP_TO_EDGE);
 #undef LOAD
+    if (!loadTexture(SkitterPalette, skitter_palette_t3x, skitter_palette_t3x_end, GPU_CLAMP_TO_EDGE, false) ||
+        !loadTexture(SkitterAsphalt, skitter_asphalt_t3x, skitter_asphalt_t3x_end, GPU_REPEAT, false)) return fail();
+    if (!loadTexture(SkitterDiffuse, skitter_diffuse_t3x, skitter_diffuse_t3x_end, GPU_CLAMP_TO_EDGE, false)) return fail();
+    loadTexture(SkitterBreakE, skitter_break_emissive_t3x, skitter_break_emissive_t3x_end,
+                GPU_CLAMP_TO_EDGE, false);
     // Varian opsional 256x256 RGB565 (128 KiB). Disimpan di linear memory supaya cache arena
     // Old 3DS tetap punya jatah VRAM. Tanpa draw pass atau stage sampling tambahan:
     // cukup gantikan binding emissive yang ada.
@@ -240,7 +261,8 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     const auto shot = cinematic_view::select(old3dsCinematics, state.camera == Camera::Prologue,
                                              state.awakeningFrame, state.defeatFrame);
     // Satu alokasi snapshot yang sudah ada. Jangan pernah memulihkan warna/depth dari shot lain.
-    if (cachedShot != shot) {
+    if (cachedShot != shot || cachedSkitter != state.skitter) {
+        cachedSkitter = state.skitter;
         arenaCache.invalidate();
         cachedShot = shot;
     }
@@ -265,9 +287,12 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     const defeat_cutscene::CameraPose deathCamera = defeat_cutscene::camera(
         fixedTree ? defeat_cutscene::Duration : state.defeatFrame);
     Mtx_PerspTilt(&projection, C3D_AngleFromDegrees(dying && !fixedClose ? deathCamera.fov : 50.f),
-                  C3D_AspectRatioTop, 0.1f, 60.f, false);
+                  C3D_AspectRatioTop, 0.1f, state.skitter ? 120.f : 60.f, false);
     // Bos di kanan statistik, di atas kartu party.
-    if (fixedClose) {
+    if (state.skitter) {
+        Mtx_LookAt(&view, FVec3_New(0.1f, 0.711f, 3.8f),
+                   FVec3_New(0.1f, 1.211f, -3.2f), FVec3_New(0.f, 1.f, 0.f), false);
+    } else if (fixedClose) {
         // Monster ditengahkan tanpa menggeser tampilan arena; getar aktor tetap beranimasi.
         Mtx_LookAt(&view, FVec3_New(0.f, 1.55f, 7.3f), FVec3_New(0.f, 2.05f, 0.3f),
                    FVec3_New(0.f, 1.f, 0.f), false);
@@ -291,12 +316,34 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     if (!restored) {
         Mtx_Identity(&model);
         setMatrix(projection, view, model, false);
-        material(BackdropD, -1, 0.f, false); draw(Backdrop);
-        material(GroundD, GroundE, 0.f, false); draw(Ground);
-        material(BuildingsD, BuildingsE, 0.f, false); draw(Buildings);
-        material(RubbleD, RubbleE, 0.f, false); draw(Rubble);
+        if (state.skitter) {
+            material(BackdropD, -1, 0.f, false); draw(SkitterSky);
+            material(SkitterAsphalt, -1, 0.f, false); draw(SkitterRoad);
+            material(GroundD, -1, 0.f, false); draw(SkitterSidewalk);
+            material(BuildingsD, -1, 0.f, false); draw(SkitterBuildings);
+            material(SkitterPalette, -1, 0.f, false); draw(SkitterDetails);
+        } else {
+            material(BackdropD, -1, 0.f, false); draw(Backdrop);
+            material(GroundD, GroundE, 0.f, false); draw(Ground);
+            material(BuildingsD, BuildingsE, 0.f, false); draw(Buildings);
+            material(RubbleD, RubbleE, 0.f, false); draw(Rubble);
+        }
         // Snapshot harus mendahului monster dan clear HUD/depth milik pemanggil.
         if (canCache) arenaCache.capture(top->frameBuf);
+    }
+
+    if (state.skitter) {
+        const float time = static_cast<float>(state.frame % 36000) / 60.f;
+        const float breath = state.stunned || state.defeated ? 0.f : .012f * std::sin(time * 2.5f);
+        const float recoil = state.hit * .06f * std::sin(time * 65.f);
+        Mtx_Identity(&model);
+        Mtx_Translate(&model, 1.5f + recoil, state.attack * .08f, -1.65f + state.attack * .28f, true);
+        Mtx_Scale(&model, 1.f, state.defeated ? .65f : 1.f + breath, 1.f);
+        setMatrix(projection, view, model, true, .95f);
+        const bool cracks = state.broken && loaded[SkitterBreakE];
+        material(SkitterDiffuse, cracks ? SkitterBreakE : -1, state.hit, state.broken && !cracks);
+        draw(state.defeated || state.stunned ? SkitterDown : (state.broken ? SkitterBreak : SkitterIdle));
+        return true;
     }
 
     if (dying) {

@@ -292,11 +292,18 @@ Party makeDefaultParty() {
     return p;
 }
 
-void Battle::start() {
-    party_ = hasPartyOverride_ ? partyOverride_ : makeDefaultParty();
+void Battle::start(EnemyKind kind, bool carryParty) {
+    if (!carryParty) party_ = hasPartyOverride_ ? partyOverride_ : makeDefaultParty();
+    else {
+        for (auto& c : party_.front) c.effects.clear();
+        for (auto& c : party_.back) c.effects.clear();
+    }
+    enemyKind_ = kind;
 
     // TUNING: fase 1 dibuat lebih santai (DP/HP lebih rendah) sebagai kontras untuk fase Awaken.
-    enemy_ = Combatant("Hellspider", "Boss", 55, 500, 0, Skill(), Skill());
+    enemy_ = kind == EnemyKind::Skitter
+        ? Combatant("Skitter", "Enemy", 45, 180, 0, Skill(), Skill())
+        : Combatant("Hellspider", "Boss", 55, 500, 0, Skill(), Skill());
     enemy_.is_enemy = true;
     enemy_.sp = 0;
 
@@ -305,10 +312,12 @@ void Battle::start() {
     round_   = 0;
     enemyActPending_ = false;
     fx_.clear();
-    message_ = "Hellspider appears!";
+    message_ = enemy_.name + " appears!";
 
-    odGauge_        = 0;
-    odBarsReady_    = 0;
+    if (!carryParty) {
+        odGauge_ = 0;
+        odBarsReady_ = 0;
+    }
     odActive_        = false;
     odExtraTurns_   = 0;
     odTotalTurns_   = 0;
@@ -622,7 +631,7 @@ void Battle::updateExecution() {
     runPlayerAction(queue_[qpos_++]);
     if (!enemy_.alive()) {
         activeSlot_ = -1;
-        if (!awakened_) {
+        if (enemyKind_ == EnemyKind::Hellspider && !awakened_) {
             phase_ = BattlePhase::Awakening;
             // Tunggu ekor visual hit terakhir (fxSpan_) + jeda 60 frame, baru cutscene awakening
             // penuh (awakening::Duration, lihat awakening.h) main sebelum ronde berikutnya mulai.
@@ -630,8 +639,8 @@ void Battle::updateExecution() {
             message_ += " A new energy begins to stir...";
         } else {
             phase_ = BattlePhase::Dying;
-            timer_ = fxSpan_ + 60 + defeat_cutscene::Duration;
-            // Efek tertunda dari serangan terakhir dipertahankan; input battle diblokir sampai pohon terungkap.
+            timer_ = fxSpan_ + 60 + (enemyKind_ == EnemyKind::Skitter ? 75 : defeat_cutscene::Duration);
+            // Efek hit terakhir diselesaikan sebelum pose kekalahan dan kemenangan.
             odActive_ = false;
             odExtraTurns_ = 0;
             odTotalTurns_ = 0;
@@ -648,7 +657,8 @@ void Battle::updateExecution() {
 void Battle::enemyFocus() {
     const int targetSlot = std::rand() % 3;
     Combatant& target = party_.front[targetSlot];
-    const int power = awakened_ ? kEnemyFocusPower : kEnemyFocusPowerPhase1;
+    const int power = enemyKind_ == EnemyKind::Skitter ? 12 :
+                      (awakened_ ? kEnemyFocusPower : kEnemyFocusPowerPhase1);
     const Skill s("focus attack", SkillKind::Attack, 0, 1, power);
     const AttackSummary a = performAttack(s, enemy_, target);
     recordHits(a, false, targetSlot, 0);
@@ -689,7 +699,7 @@ void Battle::clearStunVisualThenDelayAttack() {
 }
 
 void Battle::enemyAct() {
-    if (round_ % 3 == 0) enemyAoe();
+    if (enemyKind_ == EnemyKind::Hellspider && round_ % 3 == 0) enemyAoe();
     else                 enemyFocus();
 }
 

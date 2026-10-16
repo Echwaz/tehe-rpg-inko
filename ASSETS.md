@@ -23,3 +23,17 @@ The repository contains the inputs needed to build the current game. It does not
 5. Record each new asset's author, source URL or source file, modifications, and permission/license terms here. Existing missing records require information from the project owner; they cannot be reconstructed from filenames.
 
 The missing generators cannot be recovered from the checked-in geometry alone as their original authoring scripts. This document replaces stale source references rather than claiming that the original asset pipeline has been restored.
+
+## Skitter authoring inputs
+
+`assets/skitter/scene.blend` contains the procedural Skitter prototype, city street arena, packed textures, and close battle camera. The model and arena were created with AI-assisted Blender scripts from the user-provided Skitter reference and the existing arena palette. Existing concrete, building and skyline textures retain their original provenance above. The asphalt texture is new.
+
+Regenerate the native mesh header and generated textures with:
+
+```sh
+blender -b -P scripts/export_skitter.py -- /absolute/path/to/repository
+```
+
+Append `--preview` to render the Idle, Break and Down poses. This creates `skitter-previews/` for local review. `source/mesh_skitter_data.h` contains arena groups and three static enemy poses; no Blender dependency is required to build the game. Pose deformation is baked into those meshes for the 3DS renderer.
+
+Skitter now uses `gfx/skitter_diffuse.png` and `gfx/skitter_break_emissive.png` with surface UVs shared across its three poses. The Break texture provenance, prompt and validation notes are in `gfx/skitter_break_emissive.md`.

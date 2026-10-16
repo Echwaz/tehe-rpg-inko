@@ -41,6 +41,14 @@ The editor uses touch controls; B returns to the previous page. Done saves and r
 
 Saving writes `party.cfg.tmp` before replacing the main file and keeps the previous version in `party.cfg.bak`. If the main file cannot be opened at startup, the game tries the backup. A temporary file is never loaded automatically. Keep a separate backup of edits you want to preserve.
 
+## Skitter encounter
+
+After the dialogue, the party fights Skitter on an asphalt street before reaching Hellspider. Skitter has one phase, 45 DP and 180 HP. Each enemy turn deals one 12-power hit to a random frontline member; it has no party-wide attack or Awakening.
+
+Break uses a damaged pose, Down/Stun lowers the body and spreads the legs, and defeat collapses the model without the Hellspider tree cutscene. Choose **Continue to Hellspider** after victory. HP, DP, SP, formation and remaining skill uses carry forward. Temporary party effects and active Overdrive end at the encounter boundary; the remaining Overdrive gauge carries forward, including partial bars. Play Again starts a fresh run from the dialogue.
+
+The close camera and left-facing Skitter use the new city arena. The top screen retains its native 400×240 aspect ratio.
+
 ## Controls
 
 Touchscreen is working for any button

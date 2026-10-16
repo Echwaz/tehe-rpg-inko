@@ -90,10 +90,12 @@ int main(int /*argc*/, char** /*argv*/) {
             battle.update(touch, kDown, kHeld);
             {
                 // Begitu masuk fase Awakening, Track::Awaken terus main sebagai tema bos fase 2
-                // sampai fase Dying. Tidak ada jalur balik ke Track::Battle.
+                // sampai fase Dying. Encounter baru kembali memakai Track::Battle.
                 const BattlePhase curPhase = battle.phase();
                 if (curPhase != prevBattlePhase) {
-                    if (curPhase == BattlePhase::Awakening) audio::play(audio::Track::Awaken);
+                    if (curPhase == BattlePhase::Planning && prevBattlePhase == BattlePhase::Victory)
+                        audio::play(audio::Track::Battle);
+                    else if (curPhase == BattlePhase::Awakening) audio::play(audio::Track::Awaken);
                     // BGM di-fade saat hit terakhir, sebelum penghancuran. SFX tetap aktif.
                     else if (curPhase == BattlePhase::Dying) audio::play(audio::Track::None);
                     prevBattlePhase = curPhase;

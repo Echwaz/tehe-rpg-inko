@@ -275,6 +275,8 @@ std::string effectSummary(const Combatant& c, unsigned skipMask = 0);   // mis. 
 std::string effectLabel(const SkillEffect& fx);     // mis. "DEF+30%(2t) tim"
 
 
+enum class EnemyKind { Hellspider, Skitter };
+
 enum class BattlePhase { Planning, Executing, EnemyTurn, Awakening, Dying, Victory, Defeat };
 enum class CommandType { Attack, Skill };
 
@@ -286,11 +288,11 @@ struct Command {
 class Battle {
 public:
     // Party kustom (lihat party_config.h). Dipakai oleh start() berikutnya sebagai ganti roster
-    // bawaan. Yang disimpan adalah salinan, jadi tiap battle selalu mulai dari kondisi awal.
+    // bawaan. start() memakai salinan ini; carryParty mempertahankan kondisi party encounter sebelumnya.
     void setPartyOverride(const Party& p) { partyOverride_ = p; hasPartyOverride_ = true; }
     void clearPartyOverride() { hasPartyOverride_ = false; }
 
-    void start();
+    void start(EnemyKind kind = EnemyKind::Hellspider, bool carryParty = false);
     void update();
 
     bool canUseSkill(int slot, int skillIdx) const;
@@ -321,6 +323,7 @@ public:
     BattlePhase        phase()      const { return phase_; }
     const Party&       party()      const { return party_; }
     const Combatant&   enemy()      const { return enemy_; }
+    EnemyKind enemyKind() const { return enemyKind_; }
     bool               awakened()   const { return awakened_; }
     // Frame index into awakening::sample() saat phase_ == Awakening; negatif selagi hit terakhir
     // masih menampilkan visual tail-nya (cutscene belum mulai), habis begitu phase_ pindah.
@@ -328,6 +331,7 @@ public:
         return phase_ == BattlePhase::Awakening ? awakening::Duration - timer_ : -1;
     }
     int defeatFrame() const {
+        if (enemyKind_ == EnemyKind::Skitter) return -1;
         if (phase_ == BattlePhase::Victory) return defeat_cutscene::Duration;
         return phase_ == BattlePhase::Dying ? defeat_cutscene::Duration - timer_ : -1;
     }
@@ -368,6 +372,7 @@ private:
 
     Party       party_;
     Combatant   enemy_;
+    EnemyKind enemyKind_ = EnemyKind::Hellspider;
     BattlePhase phase_ = BattlePhase::Planning;
     bool        awakened_ = false;
     int         round_ = 0;

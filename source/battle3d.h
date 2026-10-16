@@ -6,6 +6,7 @@ enum class Camera { Battle, Prologue };
 // Hanya state visual; aturan battle tetap di combat.cpp.
 struct SceneState {
     Camera camera = Camera::Battle;
+    bool skitter = false;
     int frame = 0;
     int awakeningFrame = -1; // negatif di luar awakening
     int defeatFrame = -1;    // negatif sebelum cutscene kekalahan; ditahan di Duration saat Victory

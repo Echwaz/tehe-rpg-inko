@@ -1,8 +1,12 @@
 #include <cassert>
+#include <algorithm>
+#include <set>
+#include <utility>
 #include <cmath>
 #include <cstdio>
 #include "../source/mesh_arena_data.h"
 #include "../source/mesh_slug_data.h"
+#include "../source/mesh_skitter_data.h"
 #include "../source/mesh_slug_awaken_data.h"
 
 template <class Vertex, size_t V, size_t I>
@@ -80,6 +84,35 @@ void checkTreeSkyCoverage() {
 }
 
 int main() {
+    using namespace skitter_mesh;
+    check("Skitter idle", idle_verts, idle_indices);
+    check("Skitter Break", break_verts, break_indices);
+    check("Skitter Down", down_verts, down_indices);
+    check("Skitter road", road_verts, road_indices);
+    check("Skitter sidewalk", sidewalk_verts, sidewalk_indices);
+    check("Skitter details", details_verts, details_indices);
+    check("Skitter buildings", buildings_verts, buildings_indices);
+    check("Skitter skyline", sky_verts, sky_indices);
+    static_assert(sizeof(idle_verts) == sizeof(break_verts) && sizeof(idle_verts) == sizeof(down_verts),
+                  "Skitter pose topology must remain compatible");
+    std::set<std::pair<int, int>> surfaceUVs;
+    float idleTop = 0.f, downTop = 0.f;
+    int breakChanges = 0;
+    for (size_t i = 0; i < sizeof(idle_verts) / sizeof(idle_verts[0]); ++i) {
+        for (int axis = 0; axis < 2; ++axis) {
+            assert(idle_verts[i].uv[axis] >= 0.f && idle_verts[i].uv[axis] <= 1.f);
+            assert(idle_verts[i].uv[axis] == break_verts[i].uv[axis]);
+            assert(idle_verts[i].uv[axis] == down_verts[i].uv[axis]);
+        }
+        surfaceUVs.insert({int(idle_verts[i].uv[0] * 100000), int(idle_verts[i].uv[1] * 100000)});
+        idleTop = std::max(idleTop, idle_verts[i].pos[1]);
+        downTop = std::max(downTop, down_verts[i].pos[1]);
+        assert(down_verts[i].pos[1] >= -.05f);
+        if (std::fabs(break_verts[i].pos[1] - idle_verts[i].pos[1]) > .02f) ++breakChanges;
+    }
+    assert(downTop < idleTop * .9f && breakChanges > 100);
+    assert(surfaceUVs.size() > 200);
+
     checkTreeSkyCoverage();
     checkDefeatCamera();
     check("Ground", battle3d_arena_ground_verts, battle3d_arena_ground_indices);
@@ -106,4 +139,3 @@ int main() {
     assert(changed > BATTLE3D_SLUG_VERTEX_COUNT / 2);
     std::puts("Mesh checks OK");
 }
-
