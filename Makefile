@@ -178,7 +178,16 @@ endif
 .PHONY: all clean cia
 
 #---------------------------------------------------------------------------------
-all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+.DEFAULT_GOAL := all
+MESH_HEADERS := source/mesh_arena_data.h source/mesh_slug_data.h source/mesh_slug_awaken_data.h source/mesh_skitter_data.h source/mesh_white_tree.h
+MESH_PACK := $(BUILD)/meshes.ready
+PYTHON ?= python3
+
+$(MESH_PACK): $(MESH_HEADERS) scripts/pack_meshes.py | $(BUILD)
+	$(PYTHON) scripts/pack_meshes.py
+	@touch $@
+
+all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES) $(MESH_PACK)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 #---------------------------------------------------------------------------------

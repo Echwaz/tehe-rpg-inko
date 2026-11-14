@@ -1242,6 +1242,16 @@ static void testSkitterEncounter() {
     assert(b.phase() == BattlePhase::Victory && b.defeatFrame() == -1);
     const Party carried = b.party();
     const int gauge = b.odGauge();
+    for (int encounterIndex=0;encounterIndex<2;++encounterIndex) {
+        b.start(EnemyKind::Skitter,true);
+        assert(!b.odActive() && b.odGauge()==gauge);
+        for(int i=0;i<3;++i) {
+            assert(b.party().front[i].sp==carried.front[i].sp);
+            assert(b.party().back[i].sp==carried.back[i].sp);
+            assert(b.party().front[i].dp==carried.front[i].dp);
+            assert(b.party().front[i].hp==carried.front[i].hp);
+        }
+    }
     b.start(EnemyKind::Hellspider, true);
     assert(b.enemy().name == "Hellspider" && !b.awakened());
     assert(b.phase() == BattlePhase::Planning && b.round() == 1);

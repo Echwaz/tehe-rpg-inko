@@ -5,6 +5,7 @@
 #include "dialogue.h"
 #include "party_config.h"
 #include "ui.h"
+#include "skill_description_layout.h"
 
 class DialogueScreen {
 public:
@@ -76,15 +77,18 @@ public:
     void setPartyConfig(const party_config::PartyConfig& cfg) {
         battle_.setPartyOverride(party_config::buildParty(cfg));
     }
-    void enter(bool nextEncounter = false);
+    void enter(EnemyKind kind = kFirstEncounter, bool carryParty = false, bool returnToMap = false);
+    bool wantsMap() const {return mapRequested_;}
     void update(const TouchState& touch, u32 keysDown, u32 keysHeld);
     bool drawScene3d(C3D_RenderTarget* target) const;
     void drawTop(TextRenderer& text, bool scene3d = false) const;
     void drawBottom(TextRenderer& text) const;
     bool wantsRestart() const { return restart_; }
+    EnemyKind enemyKind() const { return battle_.enemyKind(); }
     BattlePhase phase() const { return battle_.phase(); }   // dipakai main.cpp untuk ganti BGM saat Awakening
 
 private:
+    bool returnToMap_ = false, mapRequested_ = false;
     // Plan: pilih aksi. Swap: atur formasi. SkillDetail: layar penjelasan satu skill,
     // dibuka dengan menekan-tahan atau mengetuk dua kali baris skill tersebut.
     enum class Menu { Plan, Swap, SkillDetail };
@@ -124,6 +128,8 @@ private:
     void  drawFx(TextRenderer& text, bool scene3d) const;
     float allyShakeX(int slot) const;
 
+    std::array<int, 7> buttonState_ = {{-1, -1, -1, -1, -1, -1, -1}};
+    mutable SkillDescriptionLayout skillDescriptionLayout_;
     Battle      battle_;
     ButtonGroup buttons_;
     Menu        menu_    = Menu::Plan;

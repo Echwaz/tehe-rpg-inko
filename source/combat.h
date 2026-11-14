@@ -1,6 +1,7 @@
 #pragma once
 #include "defeat_cutscene.h"
 #include "awakening.h"
+#include "encounter.h"
 #include "hit_presentation.h"
 // Logika pertempuran turn-based (tanpa dependensi 3DS).
 //
@@ -49,15 +50,15 @@ constexpr int kBlasterDevMult     = 4;    // dev_mult skill biasa Blaster: 4x le
 constexpr int kBlasterSignatureDevMult = 5;   // dev_mult skill andalan (EX) Blaster: 5x lebih cepat
 constexpr int kHpEffPct           = 130;  // bonus HP Eff: damage ke HP jadi 130% (semua skill)
 constexpr int kDpEffPct           = 130;  // bonus DP Eff: damage ke DP jadi 130%
-constexpr int kMaxDevastation     = 300;
+constexpr int kMaxDevastation     = encounter(EnemyKind::Hellspider).maxDevastation;
 constexpr int kMaxEffectStacks    = 2;
 constexpr int kMaxDefUpPct        = 70;
 constexpr int kMaxAtkDownPct      = 60;
-constexpr int kEnemyFocusPower    = 30;   // TUNING: damage serangan fokus musuh (1 hit total), fase Awaken
-constexpr int kEnemyAoePower      = 15;   // TUNING: damage serangan massal musuh (per anggota), fase Awaken
-constexpr int kEnemyFocusPowerPhase1 = 18;   // TUNING: fase 1 (Hellspider) dibuat lebih santai
-constexpr int kEnemyAoePowerPhase1   = 8;    // TUNING: fase 1 (Hellspider) dibuat lebih santai
-constexpr int kMaxDevastationAwaken  = 999;  // TUNING: cap devastation rate lebih tinggi khusus fase Awaken
+constexpr int kEnemyFocusPower = encounter(EnemyKind::Hellspider, true).focusPower;   // TUNING: damage serangan fokus musuh (1 hit total), fase Awaken
+constexpr int kEnemyAoePower = encounter(EnemyKind::Hellspider, true).aoePower;   // TUNING: damage serangan massal musuh (per anggota), fase Awaken
+constexpr int kEnemyFocusPowerPhase1 = encounter(EnemyKind::Hellspider).focusPower;   // TUNING: fase 1 (Hellspider) dibuat lebih santai
+constexpr int kEnemyAoePowerPhase1 = encounter(EnemyKind::Hellspider).aoePower;    // TUNING: fase 1 (Hellspider) dibuat lebih santai
+constexpr int kMaxDevastationAwaken  = encounter(EnemyKind::Hellspider, true).maxDevastation;  // TUNING: cap devastation rate lebih tinggi khusus fase Awaken
 constexpr int kStepDelay          = 50;
 constexpr int kEnemyDelay         = 60;
 constexpr int kStunEndDelay       = 30;   // jeda antara visual stun hilang dan musuh menyerang
@@ -275,8 +276,6 @@ std::string effectSummary(const Combatant& c, unsigned skipMask = 0);   // mis. 
 std::string effectLabel(const SkillEffect& fx);     // mis. "DEF+30%(2t) tim"
 
 
-enum class EnemyKind { Hellspider, Skitter };
-
 enum class BattlePhase { Planning, Executing, EnemyTurn, Awakening, Dying, Victory, Defeat };
 enum class CommandType { Attack, Skill };
 
@@ -331,7 +330,7 @@ public:
         return phase_ == BattlePhase::Awakening ? awakening::Duration - timer_ : -1;
     }
     int defeatFrame() const {
-        if (enemyKind_ == EnemyKind::Skitter) return -1;
+        if (encounter(enemyKind_).arena != ArenaKind::Boss) return -1;
         if (phase_ == BattlePhase::Victory) return defeat_cutscene::Duration;
         return phase_ == BattlePhase::Dying ? defeat_cutscene::Duration - timer_ : -1;
     }

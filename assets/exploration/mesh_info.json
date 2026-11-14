@@ -1,0 +1,60 @@
+{
+  "meshes": {
+    "explore_ground": {
+      "vertices": 104,
+      "triangles": 72,
+      "bytes": 2528
+    },
+    "explore_road": {
+      "vertices": 32,
+      "triangles": 16,
+      "bytes": 752
+    },
+    "explore_buildings": {
+      "vertices": 240,
+      "triangles": 120,
+      "bytes": 5536
+    },
+    "explore_sky": {
+      "vertices": 4,
+      "triangles": 2,
+      "bytes": 108
+    },
+    "explore_props": {
+      "vertices": 2440,
+      "triangles": 3664,
+      "bytes": 70800
+    },
+    "explore_ruka_idle": {
+      "vertices": 1825,
+      "triangles": 2383,
+      "bytes": 50814
+    },
+    "explore_ruka_walk0": {
+      "vertices": 1825,
+      "triangles": 2383,
+      "bytes": 50814
+    },
+    "explore_ruka_walk1": {
+      "vertices": 1825,
+      "triangles": 2383,
+      "bytes": 50814
+    },
+    "explore_ruka_walk2": {
+      "vertices": 1825,
+      "triangles": 2383,
+      "bytes": 50814
+    },
+    "explore_ruka_walk3": {
+      "vertices": 1825,
+      "triangles": 2383,
+      "bytes": 50814
+    },
+    "explore_skitter": {
+      "vertices": 602,
+      "triangles": 524,
+      "bytes": 15200
+    }
+  },
+  "palette_colors": 40
+}

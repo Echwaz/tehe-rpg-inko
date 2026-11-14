@@ -3,14 +3,16 @@ HOST_CXXFLAGS ?= -std=c++11 -O2 -g -Wall -Wextra -pedantic
 HOST_TEST_DIR ?= build-tests
 HOST_AUDIO_LIBS ?= -lvorbisidec -logg
 
-TESTS := logic party_config mesh arena_cache icon_loader page_navigation hit_presentation sfx
+TESTS := renderer mesh_io ui_cache logic party_config mesh arena_cache icon_loader page_navigation hit_presentation sfx exploration
 TEST_BINS := $(addprefix $(HOST_TEST_DIR)/,$(TESTS))
-HEADERS := $(wildcard source/*.h tests/stubs/*.h tests/audio_stubs/*.h)
+HEADERS := $(wildcard source/*.h tests/stubs/*.h tests/audio_stubs/*.h tests/renderer_stubs/*.h)
 
 .PHONY: test
-test: $(TEST_BINS) $(HOST_TEST_DIR)/runtime/.ready
-	@set -e; for test in $(filter-out $(HOST_TEST_DIR)/sfx,$(TEST_BINS)); do echo "Running $$test"; "$$test"; done
+test: $(TEST_BINS) $(HOST_TEST_DIR)/runtime/.ready $(HOST_TEST_DIR)/meshes.ready
+	python3 tests/facade_geometry_test.py
+	@set -e; for test in $(filter-out $(HOST_TEST_DIR)/sfx $(HOST_TEST_DIR)/renderer,$(TEST_BINS)); do echo "Running $$test"; "$$test"; done
 	@cd $(HOST_TEST_DIR)/runtime && ../sfx
+	@cd $(HOST_TEST_DIR)/runtime && ../renderer
 
 $(HOST_TEST_DIR)/runtime/.ready:
 	mkdir -p $(HOST_TEST_DIR)/runtime
@@ -43,3 +45,19 @@ $(HOST_TEST_DIR)/sfx: tests/sfx_test.cpp source/sfx.cpp source/bgm_decoder.cpp $
 
 $(HOST_TEST_DIR)/hit_presentation: tests/hit_presentation_test.cpp source/combat.cpp $(HEADERS) | $(HOST_TEST_DIR)
 	$(HOST_CXX) $(HOST_CXXFLAGS) $(filter %.cpp,$^) -o $@
+
+$(HOST_TEST_DIR)/mesh_io: tests/mesh_io_test.cpp $(HEADERS) | $(HOST_TEST_DIR)
+	$(HOST_CXX) $(HOST_CXXFLAGS) $< -o $@
+
+$(HOST_TEST_DIR)/exploration: tests/exploration_test.cpp $(HEADERS) source/combat.cpp | $(HOST_TEST_DIR)
+	$(HOST_CXX) $(HOST_CXXFLAGS) $< source/combat.cpp -o $@
+
+$(HOST_TEST_DIR)/ui_cache: tests/ui_cache_test.cpp source/combat.cpp $(HEADERS) | $(HOST_TEST_DIR)
+	$(HOST_CXX) $(HOST_CXXFLAGS) $(filter %.cpp,$^) -o $@
+
+$(HOST_TEST_DIR)/renderer: tests/renderer_test.cpp source/battle3d.cpp $(HEADERS) | $(HOST_TEST_DIR)
+	$(HOST_CXX) $(HOST_CXXFLAGS) -Itests/renderer_stubs $(filter %.cpp,$^) -o $@
+
+$(HOST_TEST_DIR)/meshes.ready: $(wildcard source/mesh*.h) scripts/pack_meshes.py | $(HOST_TEST_DIR)
+	python3 scripts/pack_meshes.py
+	touch $@

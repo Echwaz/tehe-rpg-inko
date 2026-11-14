@@ -8,6 +8,7 @@
 
 #include "assets.h"
 #include "battle3d.h"
+#include "battle_ui_cache.h"
 #include "circle_points.h"
 #include "screens.h"
 #include "sfx.h"
@@ -123,7 +124,7 @@ void drawOdBadge(TextRenderer& text, float cx, float cy, float r, u32 ringColor,
              z + 0.03f);
 
     if (bars > 0) {
-        char buf[4];
+        char buf[12];
         std::snprintf(buf, sizeof buf, "%d", bars);
         text.drawCentered(buf, cx, cy, textScale, colors::white);
     }
@@ -561,9 +562,12 @@ void BattleScreen::drawFx(TextRenderer& text, bool scene3d) const {
 }
 
 
-void BattleScreen::enter(bool nextEncounter) {
-    battle_.start(nextEncounter ? EnemyKind::Hellspider : EnemyKind::Skitter, nextEncounter);
+void BattleScreen::enter(EnemyKind kind, bool carryParty, bool returnToMap) {
+    returnToMap_=returnToMap;mapRequested_=false;
+    battle_.start(kind, carryParty);
     buttons_.reset();
+    buttonState_.fill(-1);
+    skillDescriptionLayout_.reset();
     menu_ = Menu::Plan;
     slot_ = 0;
     restart_ = false;
@@ -604,8 +608,11 @@ void BattleScreen::resetSwapState() {
 }
 
 void BattleScreen::buildButtons() {
-    buttons_.begin();
     const Combatant& c = battle_.party().front[slot_];
+    const auto state = battleButtonsKey(battle_, static_cast<int>(menu_), slot_);
+    if (state == buttonState_) return;
+    buttonState_ = state;
+    buttons_.begin();
 
     switch (battle_.phase()) {
     case BattlePhase::Planning:
@@ -632,8 +639,13 @@ void BattleScreen::buildButtons() {
         break;
     case BattlePhase::Victory:
     case BattlePhase::Defeat:
-        buttons_.add(BtnRestart, 16, 110, 288, 56, battle_.phase() == BattlePhase::Victory && battle_.enemyKind() == EnemyKind::Skitter
-                      ? "Continue to Hellspider" : "Play Again", true, colors::pink, 0.65f);
+        {
+            const EnemyKind next = encounter(battle_.enemyKind()).next;
+            const std::string label = battle_.phase() == BattlePhase::Victory && returnToMap_
+                ? "Return to City" : (battle_.phase() == BattlePhase::Victory && next != EnemyKind::Count
+                ? std::string("Continue to ") + encounter(next).name : "Play Again");
+            buttons_.add(BtnRestart, 16, 110, 288, 56, label.c_str(), true, colors::pink, .65f);
+        }
         break;
     case BattlePhase::Executing:
     case BattlePhase::EnemyTurn:
@@ -663,8 +675,9 @@ void BattleScreen::handle(int id) {
     } else if (id == BtnOverdrive) {
         if (battle_.activateOverdrive()) sfx::play(sfx::Id::Overdrive);
     } else if (id == BtnRestart) {
-        if (battle_.phase() == BattlePhase::Victory && battle_.enemyKind() == EnemyKind::Skitter)
-            enter(true);
+        if (battle_.phase() == BattlePhase::Victory && returnToMap_)mapRequested_=true;
+        else if (battle_.phase() == BattlePhase::Victory && encounter(battle_.enemyKind()).next != EnemyKind::Count)
+            enter(encounter(battle_.enemyKind()).next, true);
         else restart_ = true;
     }
 }
@@ -756,6 +769,7 @@ int BattleScreen::skillRowAt(int px, int py) const {
 
 void BattleScreen::openSkillDetail(int skillIdx) {
     detailSkillIdx_ = skillIdx;
+    skillDescriptionLayout_.reset();
     menu_ = Menu::SkillDetail;
     suppressNextSkillHit_ = true;   // release yang memicu gesture ini jangan ikut mengubah aksi
 }
@@ -845,7 +859,6 @@ void BattleScreen::update(const TouchState& touch, u32 keysDown, u32 keysHeld) {
         detailSkillIdx_ = -1;
     }
 
-    buildButtons();
     if (menu_ == Menu::Swap) {
         updateSwap(touch);
     } else if (menu_ == Menu::Plan) {
@@ -960,7 +973,7 @@ void BattleScreen::updateButtonsInput(u32 keysDown, u32 keysHeld) {
 bool BattleScreen::drawScene3d(C3D_RenderTarget* target) const {
     battle3d::SceneState state;
     state.frame = frame_;
-    state.skitter = battle_.enemyKind() == EnemyKind::Skitter;
+    state.enemyKind = battle_.enemyKind();
     state.awakeningFrame = battle_.awakeningFrame();
     state.defeatFrame = battle_.defeatFrame();
     state.awakened = battle_.awakened();
@@ -969,7 +982,7 @@ bool BattleScreen::drawScene3d(C3D_RenderTarget* target) const {
     state.defeated = battle_.enemy().hp <= 0;
     // Tahan pose sebelum cutscene sampai angka damage terakhir selesai memudar.
     if (battle_.phase() == BattlePhase::Awakening ||
-        (battle_.phase() == BattlePhase::Dying && !state.skitter))
+        (battle_.phase() == BattlePhase::Dying && encounter(state.enemyKind).arena == ArenaKind::Boss))
         state.defeated = false;
     for (const FxItem& item : fx_) {
         const int age = frame_ - item.start;
@@ -1268,29 +1281,6 @@ void BattleScreen::drawSwapScreen(TextRenderer& text) const {
         drawCursorBrackets(12 - 2, 190 - 2, 296 + 4, 40 + 4, colors::pink, kZPanel + 0.06f);
 }
 
-// Membungkus teks per kata agar tidak melebihi maxWidth px. C2D_WordWrap tidak melaporkan jumlah
-// baris hasilnya, jadi dihitung sendiri supaya baris berikutnya tidak menumpuk di atas teks.
-std::vector<std::string> wrapText(TextRenderer& text, const std::string& s, float scale, float maxWidth) {
-    std::vector<std::string> lines;
-    std::string cur;
-    size_t pos = 0;
-    while (pos <= s.size()) {
-        size_t next = s.find(' ', pos);
-        std::string word = s.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
-        std::string candidate = cur.empty() ? word : cur + " " + word;
-        if (!cur.empty() && text.width(candidate.c_str(), scale) > maxWidth) {
-            lines.push_back(cur);
-            cur = word;
-        } else {
-            cur = candidate;
-        }
-        if (next == std::string::npos) break;
-        pos = next + 1;
-    }
-    if (!cur.empty()) lines.push_back(cur);
-    return lines;
-}
-
 // Layar penjelasan satu skill: nama, biaya SP, jumlah hit/efek, dan sisa pemakaian.
 void BattleScreen::drawSkillDetail(TextRenderer& text) const {
     if (detailSkillIdx_ < 0 || detailSkillIdx_ > 1) return;
@@ -1311,10 +1301,8 @@ void BattleScreen::drawSkillDetail(TextRenderer& text) const {
         y += 20.f;
     };
 
-    std::string desc = s.description;
-    const char* tag = skillTag(s);
-    if (tag[0]) { if (!desc.empty()) desc += ' '; desc += tag; }
-    for (const std::string& wrapped : wrapText(text, desc, 0.4f, 276.f)) line(wrapped);
+    for (const auto& wrapped : skillDescriptionLayout_.lines(s.description, skillTag(s),
+             [&](const char* candidate) { return text.width(candidate, .4f); })) line(wrapped);
 
     if (s.kind == SkillKind::Attack) {
         const int mult = s.dev_mult;

@@ -1,17 +1,13 @@
 #include "battle3d.h"
+#include "mesh_io.h"
 #include "awakening.h"
 #include "defeat_cutscene.h"
-#include "mesh_white_tree.h"
 #include "arena_cache.h"
 #include "cinematic_view.h"
 #include <tex3ds.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include "mesh_arena_data.h"
-#include "mesh_slug_data.h"
-#include "mesh_skitter_data.h"
-#include "mesh_slug_awaken_data.h"
 #include "battle3d_shbin.h"
 
 extern "C" {
@@ -20,6 +16,8 @@ TEXTURE_SYMBOL(skitter_diffuse)
 TEXTURE_SYMBOL(skitter_break_emissive)
 TEXTURE_SYMBOL(skitter_palette)
 TEXTURE_SYMBOL(skitter_asphalt)
+TEXTURE_SYMBOL(exploration_palette)
+TEXTURE_SYMBOL(skitter_backdrop_diffuse)
 TEXTURE_SYMBOL(arena_ground_diffuse)
 TEXTURE_SYMBOL(arena_ground_emissive)
 TEXTURE_SYMBOL(arena_buildings_diffuse)
@@ -35,17 +33,18 @@ TEXTURE_SYMBOL(death_slug_break_emissive)
 
 namespace battle3d {
 namespace {
-struct RenderVertex { float position[3]; float uv[2]; };
+using RenderVertex = mesh_io::Vertex;
 static_assert(sizeof(RenderVertex) == 5 * sizeof(float), "Unexpected GPU vertex layout");
 
 struct Mesh {
     void* vertices = nullptr;
     u16* indices = nullptr;
     int count = 0;
+    bool ownsIndices = false;
     C3D_BufInfo buffers;
 };
-enum { Ground, Buildings, Rubble, Backdrop, Slug, SlugAwaken, TreeLight, TreeShade, TreeHoles, SkitterRoad, SkitterSidewalk, SkitterDetails, SkitterBuildings, SkitterSky, SkitterIdle, SkitterBreak, SkitterDown, MeshCount };
-enum { GroundD, GroundE, BuildingsD, BuildingsE, RubbleD, RubbleE, BackdropD, SlugD, SlugE, SlugBreakE, SkitterPalette, SkitterAsphalt, SkitterDiffuse, SkitterBreakE, TexCount };
+enum { Ground, Buildings, Rubble, Backdrop, Slug, SlugAwaken, TreeLight, TreeShade, TreeHoles, SkitterRoad, SkitterSidewalk, SkitterDetails, SkitterBuildings, SkitterSky, SkitterIdle, SkitterBreak, SkitterDown, ExploreGround, ExploreRoad, ExploreBuildings, ExploreSky, ExploreProps, RukaIdle, RukaWalk0, RukaWalk1, RukaWalk2, RukaWalk3, ExploreSkitter, MeshCount };
+enum { GroundD, GroundE, BuildingsD, BuildingsE, RubbleD, RubbleE, BackdropD, SlugD, SlugE, SlugBreakE, SkitterPalette, SkitterAsphalt, SkitterDiffuse, SkitterBreakE, SkitterBackdropD, ExplorePalette, TexCount };
 Mesh meshes[MeshCount];
 C3D_Tex textures[TexCount] = {};
 bool loaded[TexCount] = {};
@@ -61,7 +60,9 @@ constexpr float kEnemyYawDegrees = -20.f;
 ArenaCache arenaCache;
 cinematic_view::Shot cachedShot = cinematic_view::Shot::Moving;
 bool old3dsCinematics = true;
-bool cachedSkitter = false;
+EnemyKind cachedEnemy = EnemyKind::Count;
+ArenaKind activeArena = ArenaKind::Boss;
+bool arenaAttempted = false, arenaReady = false;
 
 // Kalau init gagal, layar atas dikosongkan dan HUD tetap bisa dipakai.
 bool fail() {
@@ -69,24 +70,37 @@ bool fail() {
     return false;
 }
 
-template <typename Vertex, size_t V, size_t I>
-bool upload(Mesh& mesh, const Vertex (&vertices)[V], const u16 (&indices)[I]) {
-    static_assert(sizeof(Vertex) == 8 * sizeof(float), "Unexpected mesh vertex layout");
-    static_assert(V <= 65536 && I % 3 == 0, "Invalid indexed triangle mesh");
-    for (size_t i = 0; i < I; ++i) if (indices[i] >= V) return false;
-    mesh.vertices = linearAlloc(V * sizeof(RenderVertex));
-    mesh.indices = static_cast<u16*>(linearAlloc(sizeof(indices)));
-    if (!mesh.vertices || !mesh.indices) return false;
-    // Shader unlit hanya membaca posisi dan UV, jadi normal tidak diunggah.
-    auto* compact = static_cast<RenderVertex*>(mesh.vertices);
-    for (size_t i = 0; i < V; ++i)
-        std::memcpy(&compact[i], &vertices[i], sizeof(RenderVertex));
-    std::memcpy(mesh.indices, indices, sizeof(indices));
-    GSPGPU_FlushDataCache(mesh.vertices, V * sizeof(RenderVertex));
-    GSPGPU_FlushDataCache(mesh.indices, sizeof(indices));
-    mesh.count = static_cast<int>(I);
+void releaseMesh(Mesh& mesh) {
+    if (mesh.vertices) linearFree(mesh.vertices);
+    if (mesh.indices && mesh.ownsIndices) linearFree(mesh.indices);
+    mesh = Mesh{};
+}
+
+bool loadMesh(int id, const char* name, int shared = -1) {
+    Mesh& mesh = meshes[id];
+    char path[96];
+    std::snprintf(path, sizeof path, "romfs:/meshes/%s.bin", name);
+    std::FILE* file = std::fopen(path, "rb");
+    mesh_io::Header h;
+    if (!mesh_io::readHeader(file, h)) { if (file) std::fclose(file); return false; }
+    if (shared >= 0 && (!meshes[shared].indices || meshes[shared].count != static_cast<int>(h.indices))) {
+        std::fclose(file); return false;
+    }
+    mesh.vertices = linearAlloc(h.vertices * sizeof(RenderVertex));
+    mesh.ownsIndices = shared < 0;
+    mesh.indices = shared < 0 ? static_cast<u16*>(linearAlloc(h.indices * sizeof(u16))) : meshes[shared].indices;
+    const bool valid = mesh_io::readPayload(file, h, static_cast<RenderVertex*>(mesh.vertices),
+                                            mesh.indices, shared < 0 ? nullptr : mesh.indices);
+    std::fclose(file);
+    if (!valid) { releaseMesh(mesh); return false; }
+    GSPGPU_FlushDataCache(mesh.vertices, h.vertices * sizeof(RenderVertex));
+    if (mesh.ownsIndices) GSPGPU_FlushDataCache(mesh.indices, h.indices * sizeof(u16));
+    mesh.count = static_cast<int>(h.indices);
     BufInfo_Init(&mesh.buffers);
-    return BufInfo_Add(&mesh.buffers, mesh.vertices, sizeof(RenderVertex), 2, 0x10) >= 0;
+    if (BufInfo_Add(&mesh.buffers, mesh.vertices, sizeof(RenderVertex), 2, 0x10) < 0) {
+        releaseMesh(mesh); return false;
+    }
+    return true;
 }
 
 bool loadTexture(int id, const u8* start, const u8* end, GPU_TEXTURE_WRAP_PARAM wrap,
@@ -164,10 +178,81 @@ void setMatrix(const C3D_Mtx& projection, const C3D_Mtx& view, const C3D_Mtx& mo
         }
     }
 }
+void releaseEncounterAssets() {
+    // Keep deferred texture bindings off the exclusive textures that are about to be freed.
+    if (loaded[GroundD]) {
+        C3D_TexBind(0, &textures[GroundD]);
+        C3D_TexBind(1, &textures[GroundD]);
+    }
+    for (int i = 0; i < MeshCount; ++i) releaseMesh(meshes[i]);
+    for (int i = 0; i < TexCount; ++i) {
+        if (i == GroundD || i == BuildingsD) continue;
+        if (loaded[i]) C3D_TexDelete(&textures[i]);
+        loaded[i] = false;
+        textures[i] = C3D_Tex{};
+    }
+    arenaReady = false;
+    arenaCache.invalidate();
+}
+
+bool loadEncounterAssets(ArenaKind arena) {
+#define LOAD(id, name, wrap) if (!loaded[id] && !loadTexture(id, name##_t3x, name##_t3x_end, wrap)) return false
+#define MESH(id, name) if (!loadMesh(id, name)) return false
+    LOAD(GroundD, arena_ground_diffuse, GPU_REPEAT);
+    LOAD(BuildingsD, arena_buildings_diffuse, GPU_REPEAT);
+    if (arena == ArenaKind::Exploration) {
+        LOAD(SkitterBackdropD, skitter_backdrop_diffuse, GPU_CLAMP_TO_EDGE);
+        LOAD(SkitterAsphalt, skitter_asphalt, GPU_REPEAT);
+        LOAD(ExplorePalette, exploration_palette, GPU_CLAMP_TO_EDGE);
+        MESH(ExploreGround, "explore_ground"); MESH(ExploreRoad, "explore_road");
+        MESH(ExploreBuildings, "explore_buildings"); MESH(ExploreSky, "explore_sky");
+        MESH(ExploreProps, "explore_props"); MESH(RukaIdle, "explore_ruka_idle");
+        if (!loadMesh(RukaWalk0,"explore_ruka_walk0",RukaIdle) ||
+            !loadMesh(RukaWalk1,"explore_ruka_walk1",RukaIdle) ||
+            !loadMesh(RukaWalk2,"explore_ruka_walk2",RukaIdle) ||
+            !loadMesh(RukaWalk3,"explore_ruka_walk3",RukaIdle)) return false;
+        MESH(ExploreSkitter, "explore_skitter");
+    } else if (arena == ArenaKind::Street) {
+        LOAD(SkitterBackdropD, skitter_backdrop_diffuse, GPU_CLAMP_TO_EDGE);
+        MESH(SkitterRoad, "skitter_road");
+        MESH(SkitterSidewalk, "skitter_sidewalk");
+        MESH(SkitterDetails, "skitter_details");
+        MESH(SkitterBuildings, "skitter_buildings");
+        MESH(SkitterSky, "skitter_sky");
+        MESH(SkitterIdle, "skitter_idle");
+        if (!loadMesh(SkitterBreak, "skitter_break", SkitterIdle) ||
+            !loadMesh(SkitterDown, "skitter_down", SkitterIdle)) return false;
+        LOAD(SkitterPalette, skitter_palette, GPU_CLAMP_TO_EDGE);
+        LOAD(SkitterAsphalt, skitter_asphalt, GPU_REPEAT);
+        LOAD(SkitterDiffuse, skitter_diffuse, GPU_CLAMP_TO_EDGE);
+        loadTexture(SkitterBreakE, skitter_break_emissive_t3x, skitter_break_emissive_t3x_end,
+                    GPU_CLAMP_TO_EDGE, false);
+    } else {
+        LOAD(BackdropD, arena_backdrop_diffuse, GPU_CLAMP_TO_EDGE);
+        MESH(Ground, "ground"); MESH(Buildings, "buildings");
+        MESH(Rubble, "rubble"); MESH(Backdrop, "backdrop");
+        MESH(Slug, "slug");
+        if (!loadMesh(SlugAwaken, "slug_awaken", Slug)) return false;
+        MESH(TreeLight, "tree_light"); MESH(TreeShade, "tree_shade"); MESH(TreeHoles, "tree_hole");
+        LOAD(GroundE, arena_ground_emissive, GPU_REPEAT);
+        LOAD(BuildingsE, arena_buildings_emissive, GPU_REPEAT);
+        LOAD(RubbleD, arena_rubble_diffuse, GPU_CLAMP_TO_EDGE);
+        LOAD(RubbleE, arena_rubble_emissive, GPU_CLAMP_TO_EDGE);
+        LOAD(SlugD, death_slug_diffuse, GPU_CLAMP_TO_EDGE);
+        LOAD(SlugE, death_slug_emissive, GPU_CLAMP_TO_EDGE);
+        loadTexture(SlugBreakE, death_slug_break_emissive_t3x, death_slug_break_emissive_t3x_end,
+                    GPU_CLAMP_TO_EDGE, false);
+    }
+#undef MESH
+#undef LOAD
+    return true;
+}
+
 } // namespace
 
-bool init() {
+bool init(C3D_RenderTarget* target) {
     if (ready) return true;
+    if (target) arenaCache.prepare(target->frameBuf);
     shader = DVLB_ParseFile(reinterpret_cast<u32*>(const_cast<u8*>(battle3d_shbin)), battle3d_shbin_size);
     if (!shader || !shader->numDVLE) return fail();
     if (R_FAILED(shaderProgramInit(&program))) return fail();
@@ -179,52 +264,12 @@ bool init() {
     AttrInfo_AddLoader(&attributes, 0, GPU_FLOAT, 3);
     AttrInfo_AddLoader(&attributes, 1, GPU_FLOAT, 2);
 
-    if (!upload(meshes[Ground], battle3d_arena_ground_verts, battle3d_arena_ground_indices) ||
-        !upload(meshes[Buildings], battle3d_arena_buildings_verts, battle3d_arena_buildings_indices) ||
-        !upload(meshes[Rubble], battle3d_arena_rubble_verts, battle3d_arena_rubble_indices) ||
-        !upload(meshes[Backdrop], battle3d_arena_backdrop_verts, battle3d_arena_backdrop_indices) ||
-        !upload(meshes[Slug], battle3d_slug_verts, battle3d_slug_indices) ||
-        !upload(meshes[SlugAwaken], battle3d_slug_awaken_verts, battle3d_slug_indices)) return fail();
-
-    using namespace skitter_mesh;
-    if (!upload(meshes[SkitterRoad], road_verts, road_indices) ||
-        !upload(meshes[SkitterSidewalk], sidewalk_verts, sidewalk_indices) ||
-        !upload(meshes[SkitterDetails], details_verts, details_indices) ||
-        !upload(meshes[SkitterBuildings], buildings_verts, buildings_indices) ||
-        !upload(meshes[SkitterSky], sky_verts, sky_indices) ||
-        !upload(meshes[SkitterIdle], idle_verts, idle_indices) ||
-        !upload(meshes[SkitterBreak], break_verts, break_indices) ||
-        !upload(meshes[SkitterDown], down_verts, down_indices)) return fail();
-
-#define LOAD(id, name, wrap) if (!loadTexture(id, name##_t3x, name##_t3x_end, wrap)) return fail()
-    LOAD(GroundD, arena_ground_diffuse, GPU_REPEAT);
-    LOAD(GroundE, arena_ground_emissive, GPU_REPEAT);
-    LOAD(BuildingsD, arena_buildings_diffuse, GPU_REPEAT);
-    LOAD(BuildingsE, arena_buildings_emissive, GPU_REPEAT);
-    LOAD(RubbleD, arena_rubble_diffuse, GPU_CLAMP_TO_EDGE);
-    LOAD(RubbleE, arena_rubble_emissive, GPU_CLAMP_TO_EDGE);
-    LOAD(BackdropD, arena_backdrop_diffuse, GPU_CLAMP_TO_EDGE);
-    LOAD(SlugD, death_slug_diffuse, GPU_CLAMP_TO_EDGE);
-    LOAD(SlugE, death_slug_emissive, GPU_CLAMP_TO_EDGE);
-#undef LOAD
-    if (!loadTexture(SkitterPalette, skitter_palette_t3x, skitter_palette_t3x_end, GPU_CLAMP_TO_EDGE, false) ||
-        !loadTexture(SkitterAsphalt, skitter_asphalt_t3x, skitter_asphalt_t3x_end, GPU_REPEAT, false)) return fail();
-    if (!loadTexture(SkitterDiffuse, skitter_diffuse_t3x, skitter_diffuse_t3x_end, GPU_CLAMP_TO_EDGE, false)) return fail();
-    loadTexture(SkitterBreakE, skitter_break_emissive_t3x, skitter_break_emissive_t3x_end,
-                GPU_CLAMP_TO_EDGE, false);
-    // Varian opsional 256x256 RGB565 (128 KiB). Disimpan di linear memory supaya cache arena
-    // Old 3DS tetap punya jatah VRAM. Tanpa draw pass atau stage sampling tambahan:
-    // cukup gantikan binding emissive yang ada.
-    loadTexture(SlugBreakE, death_slug_break_emissive_t3x,
-                death_slug_break_emissive_t3x_end, GPU_CLAMP_TO_EDGE, false);
-    if (!upload(meshes[TreeLight], white_tree::light_vertices, white_tree::light_indices) ||
-        !upload(meshes[TreeShade], white_tree::shade_vertices, white_tree::shade_indices) ||
-        !upload(meshes[TreeHoles], white_tree::hole_vertices, white_tree::hole_indices))
-        return fail();
     bool new3ds = false;
     // Kalau gagal, pakai kebijakan kamera yang lebih murah.
     old3dsCinematics = R_FAILED(APT_CheckNew3DS(&new3ds)) || !new3ds;
     cachedShot = cinematic_view::Shot::Moving;
+    cachedEnemy = EnemyKind::Count;
+    arenaAttempted = arenaReady = false;
     ready = true;
     return true;
 }
@@ -233,11 +278,8 @@ void shutdown() {
     // Cleanup juga jalan setelah init yang setengah jadi; jangan digantungkan pada ready.
     ready = false;
     arenaCache.release();
-    for (int i = 0; i < MeshCount; ++i) {
-        if (meshes[i].vertices) linearFree(meshes[i].vertices);
-        if (meshes[i].indices) linearFree(meshes[i].indices);
-        meshes[i] = Mesh{};
-    }
+    for (int i = 0; i < MeshCount; ++i) releaseMesh(meshes[i]);
+    arenaAttempted = arenaReady = false;
     for (int i = 0; i < TexCount; ++i) {
         if (loaded[i]) C3D_TexDelete(&textures[i]);
         loaded[i] = false;
@@ -249,11 +291,82 @@ void shutdown() {
     shader = nullptr;
 }
 
+static bool prepareArena(C3D_RenderTarget* top, ArenaKind arena) {
+    if (!ready || !top) return false;
+    if (arenaAttempted && activeArena == arena) return arenaReady;
+    // Fence the previous frame, then leave frame mode before Tex3DS imports.
+    // VRAM imports release staging buffers after C3D_SyncTextureCopy, which is
+    // synchronous only outside a frame. Queuing these copies in renderTop corrupts textures.
+    if (!C3D_FrameBegin(0)) return false;
+    C3D_FrameEnd(0);
+    arenaCache.prepare(top->frameBuf);
+    releaseEncounterAssets();
+    activeArena = arena;
+    arenaAttempted = true;
+    arenaReady = loadEncounterAssets(arena);
+    if (arenaReady) {
+        C3D_TexBind(0, &textures[GroundD]);
+        C3D_TexBind(1, &textures[GroundD]);
+    } else releaseEncounterAssets();
+    return arenaReady;
+}
+
+bool prepareScene(C3D_RenderTarget* top, EnemyKind kind) {return prepareArena(top,encounter(kind).arena);}
+bool prepareExploration(C3D_RenderTarget* top) {return prepareArena(top,ArenaKind::Exploration);}
+
+bool renderExploration(C3D_RenderTarget* top,const exploration::World& world,int frame) {
+    if(!ready || !top || !arenaReady || activeArena!=ArenaKind::Exploration)return false;
+    C3D_RenderTargetClear(top,C3D_CLEAR_ALL,0xBCC4B9FF,0);
+    if(!C3D_FrameDrawOn(top))return false;
+    C3D_BindProgram(&program);C3D_SetAttrInfo(&attributes);C3D_CullFace(GPU_CULL_NONE);
+    C3D_DepthTest(true,GPU_GEQUAL,GPU_WRITE_ALL);C3D_AlphaTest(false,GPU_ALWAYS,0);
+    C3D_AlphaBlend(GPU_BLEND_ADD,GPU_BLEND_ADD,GPU_ONE,GPU_ZERO,GPU_ONE,GPU_ZERO);
+    for(int i=0;i<6;++i)C3D_TexEnvInit(C3D_GetTexEnv(i));
+    const float s=std::sin(world.cameraYaw),c=std::cos(world.cameraYaw);
+    const float dx=.7f*c-8.5f*s,dz=.7f*s+8.5f*c;
+    float fraction=1.f;
+    for(int i=1;i<=40;++i) {
+        const float t=i/40.f;
+        if(!exploration::clear(exploration::Point(world.player.x+dx*t,world.player.z+dz*t),.2f)) {
+            fraction=std::max(.025f,(i-1)/40.f);break;
+        }
+    }
+    C3D_Mtx projection,view,model;
+    Mtx_PerspTilt(&projection,C3D_AngleFromDegrees(49.f),C3D_AspectRatioTop,.5f,185.f,false);
+    const float height=exploration::floorHeight(world.player)-.04f;
+    Mtx_LookAt(&view,FVec3_New(world.player.x+dx*fraction,2.6f+1.9f*fraction+height,world.player.z+dz*fraction),
+               FVec3_New(world.player.x+s*9.f,1.25f+height,world.player.z-c*9.f),FVec3_New(0,1,0),false);
+    Mtx_Identity(&model);setMatrix(projection,view,model,false);
+    material(SkitterBackdropD,-1,0,false);draw(ExploreSky);
+    material(SkitterAsphalt,-1,0,false);draw(ExploreRoad);
+    material(GroundD,-1,0,false);draw(ExploreGround);
+    material(BuildingsD,-1,0,false);draw(ExploreBuildings);
+    material(ExplorePalette,-1,0,false);draw(ExploreProps);
+    if(fraction>.16f) {
+        Mtx_Identity(&model);Mtx_Translate(&model,world.player.x,exploration::floorHeight(world.player),world.player.z,true);
+        Mtx_RotateY(&model,3.141593f-world.heading,true);
+        setMatrix(projection,view,model,false);
+        const int pose=world.moving?RukaWalk0+(static_cast<int>(world.walkTime*8.f)%4):RukaIdle;
+        draw(pose);
+    }
+    for(const auto& e:world.enemies) {
+        if(!e.alive || exploration::distance(e.position,world.player)>65.f)continue;
+        Mtx_Identity(&model);Mtx_Translate(&model,e.position.x,exploration::floorHeight(e.position),e.position.z,true);
+        Mtx_RotateY(&model,3.141593f-e.heading,true);
+        const float breath=1.f+.012f*std::sin(frame*.055f);
+        Mtx_Scale(&model,1,breath,1);setMatrix(projection,view,model,false);draw(ExploreSkitter);
+    }
+    return true;
+}
+
 bool enabled() { return ready; }
 void enemyAnchor(float& x, float& y) { x = anchorX; y = anchorY; }
 
 bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     if (!ready || !top) return false;
+    if (!arenaAttempted || !arenaReady || activeArena != encounter(state.enemyKind).arena) return false;
+    const Encounter& def = encounter(state.enemyKind);
+    const bool street = def.arena == ArenaKind::Street;
     const bool dying = state.defeatFrame >= 0;
     const defeat_cutscene::Pose death = defeat_cutscene::sample(state.defeatFrame);
     const bool cinematic = state.awakeningFrame >= 0 || dying;
@@ -261,8 +374,8 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     const auto shot = cinematic_view::select(old3dsCinematics, state.camera == Camera::Prologue,
                                              state.awakeningFrame, state.defeatFrame);
     // Satu alokasi snapshot yang sudah ada. Jangan pernah memulihkan warna/depth dari shot lain.
-    if (cachedShot != shot || cachedSkitter != state.skitter) {
-        cachedSkitter = state.skitter;
+    if (cachedShot != shot || cachedEnemy != state.enemyKind) {
+        cachedEnemy = state.enemyKind;
         arenaCache.invalidate();
         cachedShot = shot;
     }
@@ -286,12 +399,13 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     const bool fixedClose = shot == cinematic_view::Shot::Closeup;
     const defeat_cutscene::CameraPose deathCamera = defeat_cutscene::camera(
         fixedTree ? defeat_cutscene::Duration : state.defeatFrame);
-    Mtx_PerspTilt(&projection, C3D_AngleFromDegrees(dying && !fixedClose ? deathCamera.fov : 50.f),
-                  C3D_AspectRatioTop, 0.1f, state.skitter ? 120.f : 60.f, false);
+    Mtx_PerspTilt(&projection, C3D_AngleFromDegrees(dying && !fixedClose ? deathCamera.fov : def.camera.fov),
+                  C3D_AspectRatioTop, 0.1f, def.camera.farPlane, false);
     // Bos di kanan statistik, di atas kartu party.
-    if (state.skitter) {
-        Mtx_LookAt(&view, FVec3_New(0.1f, 0.711f, 3.8f),
-                   FVec3_New(0.1f, 1.211f, -3.2f), FVec3_New(0.f, 1.f, 0.f), false);
+    if (street) {
+        Mtx_LookAt(&view, FVec3_New(def.camera.x, def.camera.y, def.camera.z),
+                   FVec3_New(def.camera.targetX, def.camera.targetY, def.camera.targetZ),
+                   FVec3_New(0.f, 1.f, 0.f), false);
     } else if (fixedClose) {
         // Monster ditengahkan tanpa menggeser tampilan arena; getar aktor tetap beranimasi.
         Mtx_LookAt(&view, FVec3_New(0.f, 1.55f, 7.3f), FVec3_New(0.f, 2.05f, 0.3f),
@@ -308,16 +422,16 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
     } else {
         const float blend = cut.camera;
         Mtx_LookAt(&view,
-                   FVec3_New(-1.8f + blend * (2.8f + cut.orbit), 1.55f - blend * 0.45f,
-                             7.3f - blend * 1.3f),
-                   FVec3_New(-1.8f + blend * 1.8f, 2.05f - blend * 0.65f, 0.3f),
+                   FVec3_New(def.camera.x + blend * (2.8f + cut.orbit), def.camera.y - blend * 0.45f,
+                             def.camera.z - blend * 1.3f),
+                   FVec3_New(def.camera.targetX + blend * 1.8f, def.camera.targetY - blend * 0.65f, def.camera.targetZ),
                    FVec3_New(0.f, 1.f, 0.f), false);
     }
     if (!restored) {
         Mtx_Identity(&model);
         setMatrix(projection, view, model, false);
-        if (state.skitter) {
-            material(BackdropD, -1, 0.f, false); draw(SkitterSky);
+        if (street) {
+            material(SkitterBackdropD, -1, 0.f, false); draw(SkitterSky);
             material(SkitterAsphalt, -1, 0.f, false); draw(SkitterRoad);
             material(GroundD, -1, 0.f, false); draw(SkitterSidewalk);
             material(BuildingsD, -1, 0.f, false); draw(SkitterBuildings);
@@ -332,7 +446,7 @@ bool renderTop(C3D_RenderTarget* top, const SceneState& state) {
         if (canCache) arenaCache.capture(top->frameBuf);
     }
 
-    if (state.skitter) {
+    if (street) {
         const float time = static_cast<float>(state.frame % 36000) / 60.f;
         const float breath = state.stunned || state.defeated ? 0.f : .012f * std::sin(time * 2.5f);
         const float recoil = state.hit * .06f * std::sin(time * 65.f);

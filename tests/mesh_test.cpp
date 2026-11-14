@@ -11,12 +11,11 @@
 
 template <class Vertex, size_t V, size_t I>
 void check(const char* name, const Vertex (&vertices)[V], const unsigned short (&indices)[I]) {
-    static_assert(sizeof(Vertex) == 8 * sizeof(float), "GPU vertex stride changed");
+    static_assert(sizeof(Vertex) == 5 * sizeof(float), "GPU vertex stride changed");
     static_assert(V <= 65536 && I % 3 == 0, "16-bit triangle indices required");
     for (const auto& vertex : vertices) {
         for (float value : vertex.pos) assert(std::isfinite(value));
         for (float value : vertex.uv) assert(std::isfinite(value));
-        for (float value : vertex.nrm) assert(std::isfinite(value));
     }
     for (auto index : indices) assert(index < V);
     std::printf("%s: %zu vertices, %zu triangles, %zu GPU bytes\n", name, V, I / 3,
@@ -126,13 +125,10 @@ int main() {
         const auto& base = battle3d_slug_verts[i];
         const auto& awaken = battle3d_slug_awaken_verts[i];
         assert(base.uv[0] == awaken.uv[0] && base.uv[1] == awaken.uv[1]);
-        float normalLength = 0.f;
         float distance = 0.f;
         for (int k = 0; k < 3; ++k) {
-            normalLength += awaken.nrm[k] * awaken.nrm[k];
             distance += std::fabs(base.pos[k] - awaken.pos[k]);
         }
-        assert(std::fabs(normalLength - 1.f) < 0.001f);
         assert(awaken.pos[1] >= 0.f);
         if (distance > 0.01f) ++changed;
     }

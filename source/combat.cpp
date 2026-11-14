@@ -300,10 +300,9 @@ void Battle::start(EnemyKind kind, bool carryParty) {
     }
     enemyKind_ = kind;
 
-    // TUNING: fase 1 dibuat lebih santai (DP/HP lebih rendah) sebagai kontras untuk fase Awaken.
-    enemy_ = kind == EnemyKind::Skitter
-        ? Combatant("Skitter", "Enemy", 45, 180, 0, Skill(), Skill())
-        : Combatant("Hellspider", "Boss", 55, 500, 0, Skill(), Skill());
+    const Encounter& def = encounter(kind);
+    enemy_ = Combatant(def.name, def.role, def.dp, def.hp, 0, Skill(), Skill());
+    enemy_.max_devastation = def.maxDevastation;
     enemy_.is_enemy = true;
     enemy_.sp = 0;
 
@@ -631,7 +630,7 @@ void Battle::updateExecution() {
     runPlayerAction(queue_[qpos_++]);
     if (!enemy_.alive()) {
         activeSlot_ = -1;
-        if (enemyKind_ == EnemyKind::Hellspider && !awakened_) {
+        if (encounter(enemyKind_, awakened_).awakens) {
             phase_ = BattlePhase::Awakening;
             // Tunggu ekor visual hit terakhir (fxSpan_) + jeda 60 frame, baru cutscene awakening
             // penuh (awakening::Duration, lihat awakening.h) main sebelum ronde berikutnya mulai.
@@ -639,7 +638,7 @@ void Battle::updateExecution() {
             message_ += " A new energy begins to stir...";
         } else {
             phase_ = BattlePhase::Dying;
-            timer_ = fxSpan_ + 60 + (enemyKind_ == EnemyKind::Skitter ? 75 : defeat_cutscene::Duration);
+            timer_ = fxSpan_ + 60 + (encounter(enemyKind_, awakened_).deathDuration);
             // Efek hit terakhir diselesaikan sebelum pose kekalahan dan kemenangan.
             odActive_ = false;
             odExtraTurns_ = 0;
@@ -657,8 +656,7 @@ void Battle::updateExecution() {
 void Battle::enemyFocus() {
     const int targetSlot = std::rand() % 3;
     Combatant& target = party_.front[targetSlot];
-    const int power = enemyKind_ == EnemyKind::Skitter ? 12 :
-                      (awakened_ ? kEnemyFocusPower : kEnemyFocusPowerPhase1);
+    const int power = encounter(enemyKind_, awakened_).focusPower;
     const Skill s("focus attack", SkillKind::Attack, 0, 1, power);
     const AttackSummary a = performAttack(s, enemy_, target);
     recordHits(a, false, targetSlot, 0);
@@ -667,7 +665,7 @@ void Battle::enemyFocus() {
 }
 
 void Battle::enemyAoe() {
-    const int power = awakened_ ? kEnemyAoePower : kEnemyAoePowerPhase1;
+    const int power = encounter(enemyKind_, awakened_).aoePower;
     const Skill s("mass attack", SkillKind::Attack, 0, 1, power);
     int breaks = 0, kills = 0;
     for (int i = 0; i < 3; ++i) {
@@ -699,7 +697,8 @@ void Battle::clearStunVisualThenDelayAttack() {
 }
 
 void Battle::enemyAct() {
-    if (enemyKind_ == EnemyKind::Hellspider && round_ % 3 == 0) enemyAoe();
+    const int aoeEvery = encounter(enemyKind_, awakened_).aoeEvery;
+    if (aoeEvery > 0 && round_ % aoeEvery == 0) enemyAoe();
     else                 enemyFocus();
 }
 
@@ -741,10 +740,11 @@ void Battle::updateAwakening() {
     enemyActPending_ = false;
     // Bos baru hanya mereset break, stun, devastation, dan debuff musuh.
     // HP, DP, SP, formasi, efek, dan sisa pemakaian skill party terbawa ke battle 2.
-    enemy_ = Combatant("Awaken Hellspider", "Boss", 160, 1300, 0, Skill(), Skill());
+    const Encounter& def = encounter(enemyKind_, true);
+    enemy_ = Combatant(def.name, def.role, def.dp, def.hp, 0, Skill(), Skill());
     enemy_.is_enemy = true;
     enemy_.sp = 0;
-    enemy_.max_devastation = kMaxDevastationAwaken;   // TUNING: devastation rate fase Awaken bisa naik sampai 999%
+    enemy_.max_devastation = def.maxDevastation;   // TUNING: devastation rate fase Awaken bisa naik sampai 999%
     fx_.clear();
     startRound(); // perintah yang belum dijalankan dibuang; regen SP ronde berikutnya normal
     message_ = "Awaken Hellspider rises!";

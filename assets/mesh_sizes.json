@@ -1,0 +1,87 @@
+{
+  "ground": {
+    "vertices": 4,
+    "indices": 6,
+    "bytes": 108
+  },
+  "buildings": {
+    "vertices": 442,
+    "indices": 480,
+    "bytes": 9816
+  },
+  "rubble": {
+    "vertices": 1878,
+    "indices": 1878,
+    "bytes": 41332
+  },
+  "backdrop": {
+    "vertices": 56,
+    "indices": 84,
+    "bytes": 1304
+  },
+  "slug": {
+    "vertices": 1796,
+    "indices": 3414,
+    "bytes": 42764
+  },
+  "slug_awaken": {
+    "vertices": 1796,
+    "indices": 3414,
+    "bytes": 42764
+  },
+  "skitter_road": {
+    "vertices": 4,
+    "indices": 6,
+    "bytes": 108
+  },
+  "skitter_sidewalk": {
+    "vertices": 48,
+    "indices": 72,
+    "bytes": 1120
+  },
+  "skitter_details": {
+    "vertices": 1720,
+    "indices": 7560,
+    "bytes": 49536
+  },
+  "skitter_buildings": {
+    "vertices": 144,
+    "indices": 216,
+    "bytes": 3328
+  },
+  "skitter_sky": {
+    "vertices": 4,
+    "indices": 6,
+    "bytes": 108
+  },
+  "skitter_idle": {
+    "vertices": 746,
+    "indices": 1572,
+    "bytes": 18080
+  },
+  "skitter_break": {
+    "vertices": 746,
+    "indices": 1572,
+    "bytes": 18080
+  },
+  "skitter_down": {
+    "vertices": 746,
+    "indices": 1572,
+    "bytes": 18080
+  },
+  "tree_light": {
+    "vertices": 1857,
+    "indices": 1857,
+    "bytes": 40870
+  },
+  "tree_shade": {
+    "vertices": 1197,
+    "indices": 1197,
+    "bytes": 26350
+  },
+  "tree_hole": {
+    "vertices": 192,
+    "indices": 192,
+    "bytes": 4240
+  }
+}

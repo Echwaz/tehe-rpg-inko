@@ -1,12 +1,14 @@
 #pragma once
 #include <citro3d.h>
+#include "encounter.h"
+#include "exploration.h"
 
 namespace battle3d {
 enum class Camera { Battle, Prologue };
 // Hanya state visual; aturan battle tetap di combat.cpp.
 struct SceneState {
     Camera camera = Camera::Battle;
-    bool skitter = false;
+    EnemyKind enemyKind = EnemyKind::Hellspider;
     int frame = 0;
     int awakeningFrame = -1; // negatif di luar awakening
     int defeatFrame = -1;    // negatif sebelum cutscene kekalahan; ditahan di Duration saat Victory
@@ -18,9 +20,13 @@ struct SceneState {
     bool defeated = false;
 };
 
-bool init();
+bool init(C3D_RenderTarget* target = nullptr);
 void shutdown();
 bool enabled();
+// Call between frames; fences the GPU before releasing/importing encounter resources.
+bool prepareScene(C3D_RenderTarget* top, EnemyKind kind);
+bool prepareExploration(C3D_RenderTarget* top);
+bool renderExploration(C3D_RenderTarget* top, const exploration::World& world, int frame);
 // Dipanggil di dalam frame, sebelum objek Citro2D apa pun diantre.
 // Memulihkan atau menangkap arena statis (warna + depth), lalu menggambar monster.
 // Kalau snapshot VRAM tidak bisa dialokasikan, arena digambar langsung.

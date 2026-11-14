@@ -1,5 +1,7 @@
 # Tehe-RPG-inko
 
+The prologue now opens a third-person exploration area. Move the single squad representative with Circle Pad or D-Pad, hold B to run, use L/R to orbit the camera and X to recenter it. Skitter patrols and chases the squad on sight; contact starts battle. Choose Return to City after winning to remove that patrol and resume at the same position. At the northern end, press A near the Hellspider marker. Skitter encounters can be avoided. HP, DP, SP, formation, remaining skill uses and the Overdrive gauge carry between fights; active Overdrive does not.
+
 A fan-made Heaven Burns Red demake for the Nintendo 3DS
 
 > Non-commercial fan project. Not affiliated with Wright Flyer Studios, Key, Yostar, or Nintendo
@@ -47,7 +49,7 @@ After the dialogue, the party fights Skitter on an asphalt street before reachin
 
 Break uses a damaged pose, Down/Stun lowers the body and spreads the legs, and defeat collapses the model without the Hellspider tree cutscene. Choose **Continue to Hellspider** after victory. HP, DP, SP, formation and remaining skill uses carry forward. Temporary party effects and active Overdrive end at the encounter boundary; the remaining Overdrive gauge carries forward, including partial bars. Play Again starts a fresh run from the dialogue.
 
-The close camera and left-facing Skitter use the new city arena. The top screen retains its native 400�240 aspect ratio.
+The close camera and left-facing Skitter use the new city arena. The top screen retains its native 400Ã—240 aspect ratio.
 
 ## Controls
 
@@ -118,3 +120,11 @@ For an extra host check, use `make test HOST_TEST_DIR=build-tests-ubsan HOST_CXX
 ## Assets
 
 See [ASSETS.md](ASSETS.md) for the conversion pipeline, known provenance, and missing original generation sources. Committed mesh headers are build inputs; no missing generator is required to compile the game.
+
+## Encounter and rendering configuration
+
+`source/encounter.h` defines enemy statistics, attack cadence, arena, normal battle camera, death timing and the next encounter. Both combat and rendering use `EnemyKind`; the sequence remains Skitter â†’ Hellspider â†’ Awaken Hellspider. SP, remaining OD gauge and party resources carry as before, while active OD ends at the encounter boundary.
+
+Mesh packing uses Python 3 automatically during `make` and `make test`. Between drawing frames, the native game loads `romfs/meshes/` and textures for the current encounter into GPU buffers. Keep that folder in RomFS when packaging a custom build. The built `.3dsx` and `.cia` include it automatically. See `ASSETS.md` for the format and authoring workflow.
+
+The host test suite also checks resource switching/failure cleanup, mesh-file validation and UI caching. GPU calls are simulated in host lifecycle tests; they do not replace hardware rendering/FPS checks.
